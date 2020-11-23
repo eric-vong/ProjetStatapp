@@ -4,8 +4,8 @@ import matplotlib as plt
 
 n = 39
 
-df_m = pd.read_csv(r'F:\Desktop\Projet_Statapp\CAC40_Moyenne.csv',sep=';')
-df_corr = pd.read_csv(r'F:\Desktop\Projet_Statapp\CAC40_Covariance.csv',sep=';')
+df_m = pd.read_csv(r'F:\Desktop\Projet_Statapp\data\mean_vector.csv',sep=';')
+df_corr = pd.read_csv(r'F:\Desktop\Projet_Statapp\data\covariance_matrix.csv',sep=';')
 
 corr_matrix = np.zeros((n,n))
 mean_vect = np.zeros(n)
