@@ -67,9 +67,11 @@ def efficient_frontier_estimated(lambda_sample=100):
         print(np.matmul(np.matmul(np.transpose(markowitz_estimated_sol(k)),corr_matrix_estimated),markowitz_estimated_sol(k)))
     return R_estimated,sigma_estimated
 
+#Problème à partir d'ici, à régler
+
 R_real,sigma_real = efficient_frontier_real(100)
 R_estimated,sigma_estimated = efficient_frontier_estimated(100)
 
-plt.plot(R_real,sigma_real,'b')
+plt.plot(R_real,sigma_real,'b') 
 plt.plot(R_estimated,sigma_estimated,'r')
 plt.show()
