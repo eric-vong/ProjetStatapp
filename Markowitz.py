@@ -53,25 +53,49 @@ def markowitz_estimated_sol(lambda_m):
 def efficient_frontier_real(lambda_sample=100):
     R_real = np.zeros(lambda_sample)
     sigma_real = np.zeros(lambda_sample)
-    for k in np.arange(1,lambda_sample):
+    for k in np.arange(0,lambda_sample):
         R_real[k] = np.matmul(np.transpose(mean_vect),markowitz_real_sol(k))
         sigma_real[k] = np.matmul(np.matmul(np.transpose(markowitz_real_sol(k)),corr_matrix),markowitz_real_sol(k))
     return R_real,sigma_real
 
+def efficient_frontier_estimated_in_reality(lambda_sample=100):
+    R_estimated_real = np.zeros(lambda_sample)
+    sigma_estimated_real = np.zeros(lambda_sample)
+    for k in np.arange(0,lambda_sample):
+        R_estimated_real[k] = np.matmul(np.transpose(mean_vect),markowitz_estimated_sol(k))
+        sigma_estimated_real[k] = np.matmul(np.matmul(np.transpose(markowitz_estimated_sol(k)),corr_matrix),markowitz_estimated_sol(k))
+    return R_estimated_real,sigma_estimated_real
+    
 def efficient_frontier_estimated(lambda_sample=100):
     R_estimated = np.zeros(lambda_sample)
     sigma_estimated = np.zeros(lambda_sample)
     for k in np.arange(0,lambda_sample):
         R_estimated[k] = np.matmul(np.transpose(mean_estimated),markowitz_estimated_sol(k))
         sigma_estimated[k] = np.matmul(np.matmul(np.transpose(markowitz_estimated_sol(k)),corr_matrix_estimated),markowitz_estimated_sol(k))
-        print(np.matmul(np.matmul(np.transpose(markowitz_estimated_sol(k)),corr_matrix_estimated),markowitz_estimated_sol(k)))
     return R_estimated,sigma_estimated
 
-#Problème à partir d'ici, à régler
+def monte_carlo_estimator(mean_vector,corr_matrix,size, M = 10000):
+    R_monte_carlo = np.zeros(size)
+    sigma_monte_carlo = np.zeros(size)
+    for m in np.arange(M) :
+        R,sigma = efficient_frontier_estimated_in_reality(size)
+        R_monte_carlo += R
+        sigma_monte_carlo += sigma
+    return R_monte_carlo/M,sigma_monte_carlo/M
 
 R_real,sigma_real = efficient_frontier_real(100)
 R_estimated,sigma_estimated = efficient_frontier_estimated(100)
+R_estimated_real,sigma_estimated_real = efficient_frontier_estimated_in_reality(100)
+R_monte_carlo,sigma_monte_carlo = monte_carlo_estimator(mean_vect,corr_matrix,1024)
 
-plt.plot(R_real,sigma_real,'b') 
-plt.plot(R_estimated,sigma_estimated,'r')
+eigenvalues_real = np.sort(np.linalg.eigvals(corr_matrix))
+eigenvalues_estimated = np.sort(np.linalg.eigvals(corr_matrix_estimated))
+
+deviation = (eigenvalues_real - eigenvalues_estimated)/eigenvalues_real * 100
+print(deviation)
+
+plt.plot(sigma_real,R_real,'b') 
+plt.plot(sigma_estimated,R_estimated,'g')
+plt.plot(sigma_estimated_real,R_estimated_real,'r')
+plt.plot(sigma_monte_carlo,R_monte_carlo,'y')
 plt.show()
