@@ -13,8 +13,11 @@ df = df.reset_index(drop=True) #On réordonne les indices, faire attention pas t
 df = df.apply(lambda x: 100*x/x[0]) #On normalise 
 returns_daily = df.apply(lambda x: (x/(x.shift(1))-1)) #Retours journaliers
 returns_total = df.apply(lambda x: (x/x[0])-1) #Retour si on achète au début et on vend à la date t
+returns_total = returns_total.iloc[1:]
 returns_daily = returns_daily.iloc[1:] #On enlève la première ligne de NaN.
 d = len(df.columns) #Nombres de colonnes
+e = np.ones(d)
+
 
 #Comparaison pour la méthode la plus rapide entre iloc[1:] et .dropna
 
@@ -59,11 +62,6 @@ def speed_comparison2(nombre_test=1000):
 def cov_mean_dataframe(df):
     return df.cov(),df.mean()
 
-cov,mean = cov_mean_dataframe(returns_daily)
-inv_cov = np.linalg.inv(cov)
-d = len(df.columns)
-e = np.ones(d)
-
 def markowitz_sol(inv_cov,mean,risk_aversion):
     min_variance_portfolio = inv_cov@e/(e.T@inv_cov@e)
     market_portfolio = inv_cov@mean/(e.T@inv_cov@mean)
@@ -85,16 +83,18 @@ def sample_generation(mean,cov,sample_size = 250):
 def markowitz_front(mean,cov,sample_size = 250,lambdas=1000):
     sample,mean_estim,cov_estim= sample_generation(mean,cov)
     inv_cov_estim = np.linalg.inv(cov_estim)
-    risk_aversion_list = np.linspace(1,2**11,lambdas)
+    risk_aversion_list = np.linspace(1,2**8,lambdas)
     R_theory = [mean@markowitz_sol(inv_cov,mean,risk_aversion) for risk_aversion in risk_aversion_list]
-    R_efficient = [mean@markowitz_sol(inv_cov_estim,mean_estim,risk_aversion) for risk_aversion in risk_aversion_list]
-    R_estim = [mean_estim@markowitz_sol(inv_cov_estim,mean_estim,risk_aversion) for risk_aversion in risk_aversion_list]
-    sigma_theory = [markowitz_sol(inv_cov_estim,mean,risk_aversion).T@cov@markowitz_sol(inv_cov,mean,risk_aversion) for risk_aversion in risk_aversion_list]
-    sigma_efficient = [markowitz_sol(inv_cov_estim,mean_estim,risk_aversion).T@cov@markowitz_sol(inv_cov_estim,mean_estim,risk_aversion) for risk_aversion in risk_aversion_list]
-    sigma_estim = [markowitz_sol(inv_cov_estim,mean_estim,risk_aversion).T@cov_estim@markowitz_sol(inv_cov_estim,mean_estim,risk_aversion) for risk_aversion in risk_aversion_list]
+    R_efficient = [mean@markowitz_sol(inv_cov_estim,mean,risk_aversion) for risk_aversion in risk_aversion_list]
+    R_estim = [mean_estim@markowitz_sol(inv_cov_estim,mean,risk_aversion) for risk_aversion in risk_aversion_list]
+    sigma_theory = [markowitz_sol(inv_cov,mean,risk_aversion).T@cov@markowitz_sol(inv_cov,mean,risk_aversion) for risk_aversion in risk_aversion_list]
+    sigma_efficient = [markowitz_sol(inv_cov_estim,mean,risk_aversion).T@cov@markowitz_sol(inv_cov_estim,mean,risk_aversion) for risk_aversion in risk_aversion_list]
+    sigma_estim = [markowitz_sol(inv_cov_estim,mean,risk_aversion).T@cov_estim@markowitz_sol(inv_cov_estim,mean,risk_aversion) for risk_aversion in risk_aversion_list]
     return R_theory, R_efficient, R_estim, sigma_theory,sigma_efficient,sigma_estim
 
-R_theory,R_efficient,R_estim,sigma_theory,sigma_efficient,sigma_estim = markowitz_front(mean,cov)
+cov,mean = cov_mean_dataframe(returns_daily)
+inv_cov = np.linalg.inv(cov)
+R_theory,R_efficient,R_estim,sigma_theory,sigma_efficient,sigma_estim = markowitz_front(mean,cov,lambdas=1000)
 plt.plot(sigma_theory,R_theory,color='green')
 plt.plot(sigma_theory,R_efficient,color='blue')
 #plt.plot(sigma_theory,R_estim,color='red')
