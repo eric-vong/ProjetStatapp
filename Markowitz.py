@@ -37,7 +37,7 @@ def markowitz_portfolio(inv_cov,mean): #Donne le couple min_variance et market
     market_portfolio = inv_cov@mean/(e.T@inv_cov@mean)
     return min_variance_portfolio,market_portfolio
 
-def R_sigma_computation(mean,inv_cov,multcov,risk_aversion_list): #Le troisième cov permet d'afficher soit théorique, soit réalisée, soit estimée
+def R_sigma_computation(mean,inv_cov,multcov,risk_aversion_list): #Le paramètre multcov permet d'afficher soit théorique ou réalisée (multcov = cov), soit estimée (multcov = cov_estim)
     min_var,market=markowitz_portfolio(inv_cov,mean)
     alpha = (e.T@inv_cov@mean)/risk_aversion_list
     val_R1,val_R2 = mean@min_var,mean@market
