@@ -23,14 +23,19 @@ def mean_cov_dataframe(df): #On renvoie la moyenne + la covariance de la BDD
     cov = df.cov()
     return mean,cov
 
-def sample_generation(mean,cov,sample_size = 500): #Génération de l'échantillon + calcul de sa moyenne + covariance (à changer selon estimateur)
+def sample_generation(mean,cov,sample_size = 250): #Génération de l'échantillon + calcul de sa moyenne + covariance (à changer selon estimateur)
     sample = np.random.multivariate_normal(mean,cov,sample_size)
     sample_mean_estim = sample.mean(0)
     sample_cov_estim = (sample - sample_mean_estim).T@(sample - sample_mean_estim)/(sample_size -1)
     return sample,sample_mean_estim,sample_cov_estim
 
-#def spectrum(cov,cov_estim): #On regarde les valeurs propres
-#    eigvals_theory,eigvals_estim = np.linalg.eigvals(cov),np.linalg.eigvals(cov_estim)
+def eigvalues(mean,cov,nombre_tirage=10000):
+    eigvals_df = pd.DataFrame(np.zeros((nombre_tirage, d)))
+    for tirage in range(nombre_tirage):
+        cov_estim = sample_generation(mean,cov)[2]
+        eigvals_estim = np.linalg.eigvals(cov_estim)
+        eigvals_df.loc[tirage] = eigvals_estim
+    return eigvals_df
 
 def markowitz_portfolio(inv_cov,mean): #Donne le couple min_variance et market
     min_variance_portfolio = inv_cov@e/(e.T@inv_cov@e)
@@ -73,11 +78,14 @@ def markowitz_monte_carlo(mean,cov,k,lambdas = 500):
 mean,cov = mean_cov_dataframe(returns_daily)
 R_theory,sigma_theory = markowitz_front_theory(mean,cov,lambdas = 500)
 R_realised,sigma_realised = markowitz_front_realised(mean,cov,lambdas = 500)
-R_monte_carlo,sigma_monte_carlo = markowitz_monte_carlo(mean,cov,10, lambdas = 500)
+#R_monte_carlo,sigma_monte_carlo = markowitz_monte_carlo(mean,cov,10, lambdas = 500)
 plt.xlabel('sigma')
 plt.ylabel('R')
 plt.plot(sigma_theory,R_theory,color='green')
 plt.plot(sigma_realised,R_realised,color='blue')
-plt.plot(sigma_monte_carlo,R_monte_carlo,color='red')
+#plt.plot(sigma_monte_carlo,R_monte_carlo,color='red')
 plt.plot()
+plt.show()
+eigvals_df = eigvals(mean,cov) #Il faudrait rajouter les valeurs propres théoriques :)
+eigvals_df.hist()
 plt.show()
