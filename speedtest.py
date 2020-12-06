@@ -18,6 +18,17 @@ returns_daily = returns_daily.iloc[1:] #On enlève la première ligne de NaN.
 d = len(df.columns) #Nombres de colonnes
 e = np.ones(d)
 
+def mean_cov_dataframe(df):
+    mean,cov=df.mean(),df.cov()
+    return mean,cov
+
+def sample_generation(mean,cov,sample_size = 250):
+    sample = np.random.multivariate_normal(mean,cov,sample_size)
+    sample_mean_estim = sample.mean(0)
+    sample_cov_estim = (sample - sample_mean_estim).T@(sample - sample_mean_estim)/(sample_size -1)
+    return sample,sample_mean_estim,sample_cov_estim
+
+mean,cov = mean_cov_dataframe(returns_daily)
 
 #Comparaison pour la méthode la plus rapide entre iloc[1:] et .dropna
 
@@ -59,9 +70,6 @@ def speed_comparison2(nombre_test=1000):
 
 #speed = speed_comparison2() #On a speed < 0, donc math.sqrt est plus rapide que np.sqrt
 
-def cov_mean_dataframe(df):
-    return df.cov(),df.mean()
-
 def markowitz_portfolio(inv_cov,mean): #Donne le couple min_variance et market
     min_variance_portfolio = inv_cov@e/(e.T@inv_cov@e)
     market_portfolio = inv_cov@mean/(e.T@inv_cov@mean)
@@ -72,15 +80,12 @@ def markowitz_weight(inv_cov,mean,risk_aversion_list):
     alpha = (e.T@inv_cov@mean)/risk_aversion_list
     return ((1-alpha) * min_variance_portfolio.reshape(-1,1).repeat(risk_aversion_list.shape[0],axis=1) + alpha*market_portfolio.reshape(-1,1).repeat(risk_aversion_list.shape[0],axis=1)).T #Permet de tout vectorialiser, pas besoin de recalculer min_variance à chaque fois
 
-#Tester avec min_variance_portfolio.T + (portfolio_risk.reshape(-1,1).repeat(risk_aversion.shape[0],axis=1)/risk_aversion)
-#puis calculer r_theory,sigma_theory etc... peut-être plus rapide que liste en compréhension??? A demander
-
 def R_sigma_computation(mean,cov,risk_aversion_list):
     inv_cov = np.linalg.inv(cov)
     min_var,market=markowitz_portfolio(inv_cov,mean)
     alpha = (e.T@inv_cov@mean)/risk_aversion_list
     val_R1,val_R2 = mean@min_var,mean@market
-    val_sigma1,val_sigma2,val_sigma3 = min_var.T@inv_cov@min_var,market.T@inv_cov@market,min_var.T@inv_cov@market+market.T@inv_cov@min_var
+    val_sigma1,val_sigma2,val_sigma3 = min_var.T@cov@min_var,market.T@cov@market,min_var.T@cov@market+market.T@cov@min_var
     R = (1-alpha)*val_R1+alpha*val_R2
     sigma = (1-alpha)*(1-alpha)*val_sigma1+alpha*alpha*val_sigma2+alpha*(1-alpha)*val_sigma3
     return R,sigma
@@ -92,57 +97,29 @@ def markowitz_front1(mean,cov,sample_size = 250,lambdas=100):
     risk_aversion_list = np.linspace(1,2**8,lambdas)
     R_theory = [mean@markowitz_sol for markowitz_sol in markowitz_weight(inv_cov,mean,risk_aversion_list)]
     sigma_theory = [markowitz_sol.T@cov@markowitz_sol for markowitz_sol in markowitz_weight(inv_cov,mean,risk_aversion_list)]
-    return R_theory,sigma_theory
+    return R_theory, sigma_theory
 
 def markowitz_front2(mean,cov,sample_size = 250,lambdas=100):
-    sample,mean_estim,cov_estim= sample_generation(mean,cov)
+    sample,mean_estim,cov_estim= sample_generation(mean,cov,sample_size = sample_size)
     inv_cov_estim = np.linalg.inv(cov_estim)
     risk_aversion_list = np.linspace(1,2**8,lambdas)
     R_theory,sigma_theory = R_sigma_computation(mean,cov,risk_aversion_list)
     return R_theory, sigma_theory
 
-markowitz_front1(mean,cov)
-markowitz_front2(mean,cov) 
 def speed(test=100):
-    temps = 0
+    temps1,temps2 = 0,0
+    lambdas = 500
+    #for _ in range(test):
+    #    a = time.time()
+    #    markowitz_front1(mean,cov,sample_size=1024)
+    #    temps1+= time.time()-a
+    R,sigma = np.zeros(lambdas),np.zeros(lambdas)
     for _ in range(test):
         a = time.time()
-        markowitz_front(mean,cov,sample_size=1024)
-        temps+= time.time()-a
-    print(temps/test)
+        Rp,sigmap = markowitz_front2(mean,cov,sample_size=2**14,lambdas=lambdas)
+        R+= Rp
+        sigma+= sigmap
+        temps2+= time.time()-a
+    print(temps1/test,temps2/test*10000)
 
 speed()
-
-def speed_comparison3(test=1000):
-    temps = 0
-    risk_aversion_list = np.linspace(1,2**8,100)
-    for k in range(test):
-        a = time.time()
-        R_theory = [mean@markowitz_sol for markowitz_sol in markowitz_weight(inv_cov,mean,risk_aversion_list)]
-        temps+= time.time()-a
-    print(temps/test,R_theory)
-
-def speed_comparison4(test=1000): #HUIT FOIS PLUS RAPIDE!!!! FAUT PRENDRE LUI
-    temps = 0
-    risk_aversion_list = np.linspace(1,2**8,100)
-    for k in range(test):
-        a = time.time()
-        min_var,mark=markowitz_portfolio(inv_cov,mean)
-        alpha = (e.T@inv_cov@mean)/risk_aversion_list
-        val1,val2 = mean@min_var,mean@mark
-        R_theory = (1-alpha)*val1+alpha*val2
-        temps+=time.time()-a
-    print(temps/test,R_theory)
-
-speed_comparison3()
-speed_comparison4()
-
-
-cov,mean = cov_mean_dataframe(returns_daily)
-inv_cov = np.linalg.inv(cov)
-R_theory,R_realised,R_estim,sigma_theory,sigma_realised,sigma_estim = markowitz_front(mean,cov,100)
-plt.plot(sigma_theory,R_theory,color='green')
-plt.plot(sigma_theory,R_realised,color='blue')
-#plt.plot(sigma_theory,R_estim,color='red')
-plt.plot()
-plt.show()
