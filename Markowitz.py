@@ -29,7 +29,7 @@ def sample_generation(mean,cov,sample_size = 250): #Génération de l'échantill
     sample_cov_estim = (sample - sample_mean_estim).T@(sample - sample_mean_estim)/(sample_size -1)
     return sample,sample_mean_estim,sample_cov_estim
 
-def eigvalues(mean,cov,nombre_tirage=10000):
+def eigvals(mean,cov,nombre_tirage=10000):
     eigvals_df = pd.DataFrame(np.zeros((nombre_tirage, d)))
     for tirage in range(nombre_tirage):
         cov_estim = sample_generation(mean,cov)[2]
@@ -86,6 +86,8 @@ plt.plot(sigma_realised,R_realised,color='blue')
 #plt.plot(sigma_monte_carlo,R_monte_carlo,color='red')
 plt.plot()
 plt.show()
+eigvals_theory = np.linalg.eigvals(cov)
 eigvals_df = eigvals(mean,cov) #Il faudrait rajouter les valeurs propres théoriques :)
 eigvals_df.hist()
+plt.axvline(eigvals_theory.all(), color='k', linestyle='dashed', linewidth=1)
 plt.show()
