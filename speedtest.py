@@ -106,9 +106,8 @@ def markowitz_front2(mean,cov,sample_size = 250,lambdas=100):
     R_theory,sigma_theory = R_sigma_computation(mean,cov,risk_aversion_list)
     return R_theory, sigma_theory
 
-def speed(test=100):
+def speed(test=100,lambdas = 100):
     temps1,temps2 = 0,0
-    lambdas = 500
     #for _ in range(test):
     #    a = time.time()
     #    markowitz_front1(mean,cov,sample_size=1024)
@@ -139,3 +138,5 @@ def test_affectation(test=10000,condition = False):
         x = condition * var1 + (1-condition)*var2
         temps2+= time.time() - a
     print(temps1/test,temps2/test)
+
+#test_affectation() #Résultat pas étonnant, le deuxième test doit évaluer deux fois condition
