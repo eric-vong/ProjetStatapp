@@ -123,3 +123,19 @@ def speed(test=100):
     print(temps1/test,temps2/test*10000)
 
 speed()
+
+def test_affectation(test=10000,condition = False):
+    temps1,temps2 = 0,0
+    var1,var2 = cov, cov+1
+    for _ in range(test):
+        a = time.time()
+        if condition:
+            x = var1
+        else :
+            x = var2
+        temps1+= time.time() - a
+    for _ in range(test):
+        a = time.time()
+        x = condition * var1 + (1-condition)*var2
+        temps2+= time.time() - a
+    print(temps1/test,temps2/test)

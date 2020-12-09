@@ -29,14 +29,6 @@ def sample_generation(mean,cov,sample_size = 250): #Génération de l'échantill
     sample_cov_estim = (sample - sample_mean_estim).T@(sample - sample_mean_estim)/(sample_size -1)
     return sample,sample_mean_estim,sample_cov_estim
 
-def eigvals(mean,cov,nombre_tirage=10000):
-    eigvals_df = pd.DataFrame(np.zeros((nombre_tirage, d)))
-    for tirage in range(nombre_tirage):
-        cov_estim = sample_generation(mean,cov)[2]
-        eigvals_estim = np.linalg.eigvals(cov_estim)
-        eigvals_df.loc[tirage] = eigvals_estim
-    return eigvals_df
-
 def markowitz_portfolio(inv_cov,mean): #Donne le couple min_variance et market
     min_variance_portfolio = inv_cov@e/(e.T@inv_cov@e)
     market_portfolio = inv_cov@mean/(e.T@inv_cov@mean)
@@ -51,20 +43,24 @@ def R_sigma_computation(mean,inv_cov,multcov,risk_aversion_list): #Le paramètre
     sigma = (1-alpha)*(1-alpha)*val_sigma1+alpha*alpha*val_sigma2+alpha*(1-alpha)*val_sigma3
     return R,sigma
 
-def markowitz_front_theory(mean,cov,lambdas = 100):
+def markowitz_front_theory(mean,cov,lambdas = 500): #Calcule la frontière efficiente théorique une fois pour toute
     inv_cov = np.linalg.inv(cov)
     risk_aversion_list = np.linspace(1,2**8,lambdas)
     R_theory,sigma_theory = R_sigma_computation(mean,inv_cov,cov,risk_aversion_list)
     return R_theory,sigma_theory
     
-def markowitz_front_realised(mean,cov,sample_size = 250,lambdas=500): #Rajouter une option pour R_estimee,sigma_estimee?
+def markowitz_front_realised(mean,cov,sample_size = 250,lambdas=500,theory=True): #Génère un échantillon et calcule les frontières efficientes réalisées si True sinon estimées
     sample,mean_estim,cov_estim= sample_generation(mean,cov,sample_size)
     inv_cov_estim = np.linalg.inv(cov_estim)
     risk_aversion_list = np.linspace(1,2**8,lambdas)
-    R_realised,sigma_realised = R_sigma_computation(mean,inv_cov_estim,cov,risk_aversion_list)
-    return R_realised,sigma_realised
+    if theory:
+        multcov = cov
+    else :
+        multcov = cov_estim
+    R,sigma = R_sigma_computation(mean,inv_cov_estim,multcov,risk_aversion_list)      
+    return R,sigma
 
-def markowitz_monte_carlo(mean,cov,k,lambdas = 500):
+def markowitz_monte_carlo(mean,cov,k,lambdas = 500): #Processus de Monte-Carlo
     size = 2**k
     M = 10000
     R_monte_carlo,sigma_monte_carlo = np.zeros(lambdas),np.zeros(lambdas)
@@ -78,16 +74,29 @@ def markowitz_monte_carlo(mean,cov,k,lambdas = 500):
 mean,cov = mean_cov_dataframe(returns_daily)
 R_theory,sigma_theory = markowitz_front_theory(mean,cov,lambdas = 500)
 R_realised,sigma_realised = markowitz_front_realised(mean,cov,lambdas = 500)
-#R_monte_carlo,sigma_monte_carlo = markowitz_monte_carlo(mean,cov,10, lambdas = 500)
+R_estimated,sigma_estimated = markowitz_front_realised(mean,cov,lambdas = 500, theory = False)
+R_monte_carlo,sigma_monte_carlo = markowitz_monte_carlo(mean,cov,10, lambdas = 500)
+
 plt.xlabel('sigma')
 plt.ylabel('R')
 plt.plot(sigma_theory,R_theory,color='green')
 plt.plot(sigma_realised,R_realised,color='blue')
-#plt.plot(sigma_monte_carlo,R_monte_carlo,color='red')
+plt.plot(sigma_monte_carlo,R_monte_carlo,color='red')
 plt.plot()
 plt.show()
+
+def eigvals(mean,cov,nombre_tirage=100,sample_size = 250):
+    eigvals_df = pd.DataFrame(np.zeros((nombre_tirage, d)))
+    for tirage in range(nombre_tirage):
+        cov_estim = sample_generation(mean,cov,sample_size = sample_size)[2]
+        eigvals_estim = np.linalg.eigvals(cov_estim)
+        eigvals_df.loc[tirage] = eigvals_estim
+    return eigvals_df
+
 eigvals_theory = np.linalg.eigvals(cov)
-eigvals_df = eigvals(mean,cov) #Il faudrait rajouter les valeurs propres théoriques :)
-eigvals_df.hist()
-plt.axvline(eigvals_theory.all(), color='k', linestyle='dashed', linewidth=1)
+eigvals_df = eigvals(mean,cov)
+for index in range(len(eigvals_df.columns)):
+    eigvals_df.hist(column=index)
+    plt.axvline(x=eigvals_theory[index])
+plt.plot()
 plt.show()
