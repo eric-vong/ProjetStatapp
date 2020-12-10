@@ -79,52 +79,22 @@ R_estimated,sigma_estimated = markowitz_front_realised(mean,cov,lambdas = 100, t
 plt.xlabel('$\sigma_p$')
 plt.ylabel('$R_p$')
 plt.title('Rendements en fonction de la variance d\'un portefeuille')
-
 R_realised,sigma_realised = markowitz_front_realised(mean,cov,lambdas = 100)
-plt.plot(sigma_theory,R_theory,color='green',label='oui')
-plt.plot(sigma_realised,R_realised,color='blue',label='tes')
-plt.plot(sigma_monte_carlo,R_monte_carlo,color='red')
-#plt.plot(sigma_estimated,R_estimated,color='orange')
+plt.plot(sigma_theory,R_theory,color='green',label='theory')
+plt.plot(sigma_realised,R_realised,color='blue',label='realised')
+#plt.plot(sigma_monte_carlo,R_monte_carlo,color='red',label='monte-carlo')
+#plt.plot(sigma_estimated,R_estimated,color='orange',label='estimated')
+plt.legend()
 plt.plot()
 plt.show()
 
-def eigvals(mean,cov,nombre_tirage=100,sample_size = 250):
-    eigvals_df = pd.DataFrame(np.zeros((nombre_tirage, d)))
-    for tirage in range(nombre_tirage):
-        cov_estim = sample_generation(mean,cov,sample_size = sample_size)[2]
-        eigvals_estim = np.linalg.eigvals(cov_estim)
-        eigvals_df.loc[tirage] = eigvals_estim
-    return eigvals_df
-
+plt.xlabel('$\lambda$')
+plt.ylabel('ocurrence')
+plt.title('Valeurs propres de la matrice théorique et de la matrice estimée')
 eigvals_theory = np.linalg.eigvals(cov)
-eigvals_estimated = np.linalg.eigvals(cov_estim)
-eigvals_df = eigvals(mean,cov)
-for index in range(3):
-    eigvals_df.hist(column=index)
-    plt.axvline(x=eigvals_theory[index],color='red')
-plt.plot()
-plt.show()
-
-for index in range(len(eigvals_df.columns)):
-    plt.axvline(eigvals_theory[index],color='red')
-    plt.axvline(eigvals_estimated[index],color='blue')
-plt.show()
-
-vp_est=eigvals_estimated
-vp=eigvals_theory
-L_est=[0]*100
-L_th =[0]*100
-for i in range(100):
-    for index in range(len(vp_est)):
-        k = vp_est[index]
-        j = vp[index]
-        if i*10**-4<k and k<(i+1)*10**-4:
-            L_est[i]+=1
-        if i*10**-4<j and j<(i+1)*10**-4:
-            L_th[i]+=1
-M=np.linspace(0,10**-2,10**2)
-
-plt.hist(L_est,bins=M,color='blue')
-plt.hist(L_th,bins = M,color='red')
-plt.ylim((0,5))
+eigvals_estimated = np.linalg.eigvals(sample_generation(mean,cov)[2])
+bins = np.append(np.linspace(10**-5,10**-3,100),np.linspace(6*10**-3,8*10**-3,100))
+plt.hist(eigvals_theory,bins=bins,color='red',label='theory')
+plt.hist(eigvals_estimated,bins=bins,color='blue',label='estimated')
+plt.legend()
 plt.show()
