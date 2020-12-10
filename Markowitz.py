@@ -12,8 +12,6 @@ df = df.dropna() #On enlève toutes les lignes où il manque au moins une donné
 df = df.reset_index(drop=True) #On réordonne les indices, faire attention pas toujours bien si on veut calculer le return monthly
 df = df.apply(lambda x: 100*x/x[0]) #On normalise 
 returns_daily = df.apply(lambda x: (x/(x.shift(1))-1)) #Retours journaliers
-returns_total = df.apply(lambda x: (x-1)) #Retour si on achète au début et on vend à la date t
-returns_total = returns_total.iloc[1:]
 returns_daily = returns_daily.iloc[1:] #On enlève la première ligne de NaN.
 d = len(df.columns) #Nombres de colonnes
 e = np.ones(d)
@@ -74,15 +72,14 @@ mean,cov = mean_cov_dataframe(returns_daily)
 R_theory,sigma_theory = markowitz_front_theory(mean,cov,lambdas = 100)
 R_realised,sigma_realised = markowitz_front_realised(mean,cov,lambdas = 100)
 R_estimated,sigma_estimated = markowitz_front_realised(mean,cov,lambdas = 100, theory = False)
-#R_monte_carlo,sigma_monte_carlo = markowitz_monte_carlo(mean,cov,10, lambdas = 100)
+R_monte_carlo,sigma_monte_carlo = markowitz_monte_carlo(mean,cov,10, lambdas = 100)
 
 plt.xlabel('$\sigma_p$')
 plt.ylabel('$R_p$')
 plt.title('Rendements en fonction de la variance d\'un portefeuille')
-R_realised,sigma_realised = markowitz_front_realised(mean,cov,lambdas = 100)
-plt.plot(sigma_theory,R_theory,color='green',label='theory')
+plt.plot(sigma_theory,R_theory,color='black',label='theory',linewidth=5) #A mettre dans les bonnes unités pour le ratio de Sharpe
 plt.plot(sigma_realised,R_realised,color='blue',label='realised')
-#plt.plot(sigma_monte_carlo,R_monte_carlo,color='red',label='monte-carlo')
+plt.plot(sigma_monte_carlo,R_monte_carlo,color='red',label='monte-carlo')
 #plt.plot(sigma_estimated,R_estimated,color='orange',label='estimated')
 plt.legend()
 plt.plot()
@@ -91,8 +88,8 @@ plt.show()
 plt.xlabel('$\lambda$')
 plt.ylabel('ocurrence')
 plt.title('Valeurs propres de la matrice théorique et de la matrice estimée')
-eigvals_theory = np.linalg.eigvals(cov)
-eigvals_estimated = np.linalg.eigvals(sample_generation(mean,cov)[2])
+eigvals_theory = np.linalg.eigvalsh(cov)
+eigvals_estimated = np.linalg.eigvalsh(sample_generation(mean,cov)[2])
 bins = np.append(np.linspace(10**-5,10**-3,100),np.linspace(6*10**-3,8*10**-3,100))
 plt.hist(eigvals_theory,bins=bins,color='red',label='theory')
 plt.hist(eigvals_estimated,bins=bins,color='blue',label='estimated')
