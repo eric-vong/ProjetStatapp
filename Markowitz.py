@@ -13,7 +13,8 @@ df = df.reset_index(drop=True) #On réordonne les indices, faire attention pas t
 df = df.apply(lambda x: 100*x/x[0]) #On normalise 
 returns_daily = df.apply(lambda x: (x/(x.shift(1))-1)) #Retours journaliers
 returns_daily = returns_daily.iloc[1:] #On enlève la première ligne de NaN.
-d = len(df.columns) #Nombres de colonnes
+d = len(df.columns) #Nombre de colonnes
+T = len(df) #Nombre de lignes
 e = np.ones(d)
 
 def mean_cov_dataframe(df): #On renvoie la moyenne + la covariance de la BDD
@@ -45,6 +46,7 @@ def markowitz_front_theory(mean,cov,lambdas = 500): #Calcule la frontière effic
     inv_cov = np.linalg.inv(cov)
     risk_aversion_list = np.linspace(1,2**4,lambdas)
     R_theory,sigma_theory = R_sigma_computation(mean,inv_cov,cov,risk_aversion_list)
+    sigma_theory = sigma_theory/sqrt(T)
     return R_theory,sigma_theory
     
 def markowitz_front_realised(mean,cov,sample_size = 250,lambdas=100,theory=True): #Génère un échantillon et calcule les frontières efficientes réalisées si True sinon estimées (comparées à la théorie ou non)
@@ -77,7 +79,7 @@ R_monte_carlo,sigma_monte_carlo = markowitz_monte_carlo(mean,cov,10, lambdas = 1
 plt.xlabel('$\sigma_p$')
 plt.ylabel('$R_p$')
 plt.title('Rendements en fonction de la variance d\'un portefeuille')
-plt.plot(sigma_theory,R_theory,color='black',label='theory',linewidth=5) #A mettre dans les bonnes unités pour le ratio de Sharpe
+plt.plot(sigma_theory,R_theory,color='black',label='theory',linewidth=5)
 plt.plot(sigma_realised,R_realised,color='blue',label='realised')
 plt.plot(sigma_monte_carlo,R_monte_carlo,color='red',label='monte-carlo')
 #plt.plot(sigma_estimated,R_estimated,color='orange',label='estimated')
@@ -95,3 +97,66 @@ plt.hist(eigvals_theory,bins=bins,color='red',label='theory')
 plt.hist(eigvals_estimated,bins=bins,color='blue',label='estimated')
 plt.legend()
 plt.show()
+
+def shrinkage(alpha,cov_estim): #A voir si on prend en paramètre une liste alpha ou juste un alpha
+    inv_cov_estim = np.linalg.inv(cov_estim)
+    return ((1 + 1/(T+alpha))*cov_estim + (alpha/(T*(T+alpha+1)))* e @ e.T / e.T@inv_cov_estim@e)
+
+def pi_i_j(cov_estim,i,j):
+    val = 0
+    ligne_i_centre = df.iloc[i]-df.iloc[i].mean()
+    ligne_j_centre = df.iloc[j]-df.iloc[j].mean()
+    for k in range(d):
+        val+= (ligne_i_centre.iloc[k]*ligne_j_centre.iloc[k] - cov_estim[i,j])**2  #((df.iloc[i] - R_i_mean)*(df.iloc[j]-R_j_mean)) peut être?
+    return val/T
+
+def pi(cov_estim):
+    val = 0
+    for i in range(d):
+        for j in range(d):
+            val += pi_i_j(cov_estim,i,j)
+    return val
+
+def mu_i_j(cov_estim,i,j):
+    val = 0
+    ligne_i_centre = df.iloc[i]-df.iloc[i].mean()
+    ligne_j_centre = df.iloc[j]-df.iloc[j].mean()
+    for k in range(d):
+        val+= (ligne_i_centre.iloc[k]**2 - cov_estim[i,j])*(ligne_i_centre.iloc[k]*ligne_j_centre.iloc[k] - cov_estim[i,j])
+    return val/T
+
+def rho(cov_estim,rho_mean):
+    val = 0
+    for i in range(d):
+        val+= pi_i_j(cov_estim,i,i)
+        somme = 0
+        for j in range(d):
+            if i == j :
+                pass
+            else :
+                coeff = sqrt(cov_estim[j,j]/cov_estim[i,i])
+                somme+= coeff * mu_i_j(cov_estim,i,j) + 1/coeff * mu_i_j(cov_estim,j,i)
+        somme = somme*rho_mean/2
+        val+= somme
+    return val
+
+def phi(cov_estim,rho_mean):
+    phi = np.zeros((d,d))
+    for i in range(d):
+        phi[i,i] = cov_estim[i,i]
+        for j in range(d):
+            coeff = rho_mean * sqrt(cov_estim[i,i]*cov_estim[j,j])
+            phi[i,j] = coeff
+            phi[j,i] = coeff
+    return phi
+
+def gamma(phi,cov_estim):
+    val = 0
+    for i in range(d):
+        for j in range(d):
+            val+= (phi[i,j] - cov_estim[i,j])**2
+    return val
+
+def LedoitWolf(phi,cov_estim,rho_mean):
+    coeff = max(0,min(1/T * (pi(cov_estim) - rho(cov_estim,rho_mean))/gamma(phi,cov_estim),1))
+    return coeff*phi + (1-coeff)*cov
