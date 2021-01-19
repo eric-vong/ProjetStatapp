@@ -56,7 +56,6 @@ def markowitz_front_realised(mean,cov,sample_size = 250,lambdas=100,theory=True,
     if lw : #Si on estime via Ledoit Wolf, éventuellement si plus à ajouter on remplace cov_estim dans le calcul en le mettant en argument dans la fonction
         LW = LedoitWolf().fit(sample)
         cov_estim = LW.covariance_
-        print(cov_estim)
     inv_cov_estim = np.linalg.inv(cov_estim)
     risk_aversion_list = np.linspace(1,2**4,lambdas)
     if theory:
@@ -78,21 +77,21 @@ def markowitz_monte_carlo(mean,cov,k,lambdas = 100,LedoitWolf = False): #Process
 
 mean,cov = mean_cov_dataframe(returns_daily) #Moyenne et covariance théorique
 R_theory,sigma_theory = markowitz_front_theory(mean,cov,lambdas = 100)
-#R_realised,sigma_realised = markowitz_front_realised(mean,cov,lambdas = 100)
-#R_realised_lw,sigma_realised_lw = markowitz_front_realised(mean,cov,lambdas = 100, lw = True)
-#R_estimated,sigma_estimated = markowitz_front_realised(mean,cov,lambdas = 100, theory = False)
+R_realised,sigma_realised = markowitz_front_realised(mean,cov,lambdas = 100)
+R_realised_lw,sigma_realised_lw = markowitz_front_realised(mean,cov,lambdas = 100, lw = True)
+R_estimated,sigma_estimated = markowitz_front_realised(mean,cov,lambdas = 100, theory = False)
 R_monte_carlo,sigma_monte_carlo = markowitz_monte_carlo(mean,cov,10, lambdas = 100)
-R_monte_carlo_lw,sigma_monte_carlo_lw = markowitz_monte_carlo(mean,cov,14,lambdas = 100, LedoitWolf = True)
+R_monte_carlo_lw,sigma_monte_carlo_lw = markowitz_monte_carlo(mean,cov,10,lambdas = 100, LedoitWolf = True)
 
 plt.xlabel('$\sigma_p$')
 plt.ylabel('$R_p$')
 plt.title('Rendements en fonction de la variance d\'un portefeuille')
 plt.plot(sigma_theory,R_theory,color='black',label='theory',linewidth=5)
-#plt.plot(sigma_realised,R_realised,color='blue',label='realised')
-#plt.plot(sigma_realised_lw,R_realised_lw,color='orange',label='realised_lw')
+plt.plot(sigma_realised,R_realised,color='blue',label='realised')
+plt.plot(sigma_realised_lw,R_realised_lw,color='orange',label='realised_lw')
 plt.plot(sigma_monte_carlo,R_monte_carlo,color='red',label='monte-carlo')
 plt.plot(sigma_monte_carlo_lw,R_monte_carlo_lw,color='green',label='monte-carlo_lw')
-#plt.plot(sigma_estimated,R_estimated,color='orange',label='estimated')
+plt.plot(sigma_estimated,R_estimated,color='orange',label='estimated')
 plt.legend()
 plt.plot()
 plt.show()
