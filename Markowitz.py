@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd 
 import matplotlib.pyplot as plt
+from sklearn.covariance import LedoitWolf
 from math import sqrt
 import time
 
@@ -28,6 +29,7 @@ def sample_generation(mean,cov,sample_size = 250): #Génération de l'échantill
     sample_cov_estim = np.cov(sample.T,bias=False)
     return sample,sample_mean_estim,sample_cov_estim
 
+
 def markowitz_portfolio(inv_cov,mean): #Donne le couple min_variance et market
     min_variance_portfolio = inv_cov@e/(e.T@inv_cov@e)
     market_portfolio = inv_cov@mean/(e.T@inv_cov@mean)
@@ -46,11 +48,15 @@ def markowitz_front_theory(mean,cov,lambdas = 500): #Calcule la frontière effic
     inv_cov = np.linalg.inv(cov)
     risk_aversion_list = np.linspace(1,2**4,lambdas)
     R_theory,sigma_theory = R_sigma_computation(mean,inv_cov,cov,risk_aversion_list)
-    sigma_theory = sigma_theory/sqrt(T)
+    sigma_theory = sigma_theory
     return R_theory,sigma_theory
     
-def markowitz_front_realised(mean,cov,sample_size = 250,lambdas=100,theory=True): #Génère un échantillon et calcule les frontières efficientes réalisées si True sinon estimées (comparées à la théorie ou non)
+def markowitz_front_realised(mean,cov,sample_size = 250,lambdas=100,theory=True,lw=False): #Génère un échantillon et calcule les frontières efficientes réalisées si True sinon estimées (comparées à la théorie ou non)
     sample,mean_estim,cov_estim= sample_generation(mean,cov,sample_size)
+    if lw : #Si on estime via Ledoit Wolf, éventuellement si plus à ajouter on remplace cov_estim dans le calcul en le mettant en argument dans la fonction
+        LW = LedoitWolf().fit(sample)
+        cov_estim = LW.covariance_
+        print(cov_estim)
     inv_cov_estim = np.linalg.inv(cov_estim)
     risk_aversion_list = np.linspace(1,2**4,lambdas)
     if theory:
@@ -60,28 +66,32 @@ def markowitz_front_realised(mean,cov,sample_size = 250,lambdas=100,theory=True)
     R,sigma = R_sigma_computation(mean,inv_cov_estim,multcov,risk_aversion_list)      
     return R,sigma
 
-def markowitz_monte_carlo(mean,cov,k,lambdas = 100): #Processus de Monte-Carlo
+def markowitz_monte_carlo(mean,cov,k,lambdas = 100,LedoitWolf = False): #Processus de Monte-Carlo
     size = 2**k
     M = 10000
     R_monte_carlo,sigma_monte_carlo = np.zeros(lambdas),np.zeros(lambdas)
     for _ in range(M):
-        R_realised,sigma_realised = markowitz_front_realised(mean,cov,sample_size = size,lambdas = lambdas)
+        R_realised,sigma_realised = markowitz_front_realised(mean,cov,sample_size = size,lambdas = lambdas, lw = LedoitWolf )
         R_monte_carlo+= R_realised
         sigma_monte_carlo+= sigma_realised
     return R_monte_carlo/M,sigma_monte_carlo/M
 
-mean,cov = mean_cov_dataframe(returns_daily)
+mean,cov = mean_cov_dataframe(returns_daily) #Moyenne et covariance théorique
 R_theory,sigma_theory = markowitz_front_theory(mean,cov,lambdas = 100)
-R_realised,sigma_realised = markowitz_front_realised(mean,cov,lambdas = 100)
-R_estimated,sigma_estimated = markowitz_front_realised(mean,cov,lambdas = 100, theory = False)
+#R_realised,sigma_realised = markowitz_front_realised(mean,cov,lambdas = 100)
+#R_realised_lw,sigma_realised_lw = markowitz_front_realised(mean,cov,lambdas = 100, lw = True)
+#R_estimated,sigma_estimated = markowitz_front_realised(mean,cov,lambdas = 100, theory = False)
 R_monte_carlo,sigma_monte_carlo = markowitz_monte_carlo(mean,cov,10, lambdas = 100)
+R_monte_carlo_lw,sigma_monte_carlo_lw = markowitz_monte_carlo(mean,cov,14,lambdas = 100, LedoitWolf = True)
 
 plt.xlabel('$\sigma_p$')
 plt.ylabel('$R_p$')
 plt.title('Rendements en fonction de la variance d\'un portefeuille')
 plt.plot(sigma_theory,R_theory,color='black',label='theory',linewidth=5)
-plt.plot(sigma_realised,R_realised,color='blue',label='realised')
+#plt.plot(sigma_realised,R_realised,color='blue',label='realised')
+#plt.plot(sigma_realised_lw,R_realised_lw,color='orange',label='realised_lw')
 plt.plot(sigma_monte_carlo,R_monte_carlo,color='red',label='monte-carlo')
+plt.plot(sigma_monte_carlo_lw,R_monte_carlo_lw,color='green',label='monte-carlo_lw')
 #plt.plot(sigma_estimated,R_estimated,color='orange',label='estimated')
 plt.legend()
 plt.plot()
@@ -100,7 +110,12 @@ plt.show()
 
 def shrinkage(alpha,cov_estim): #A voir si on prend en paramètre une liste alpha ou juste un alpha
     inv_cov_estim = np.linalg.inv(cov_estim)
-    return ((1 + 1/(T+alpha))*cov_estim + (alpha/(T*(T+alpha+1)))* e @ e.T / e.T@inv_cov_estim@e)
+    prod_1 = e@e.T
+    prod_2 = e.T@inv_cov_estim@e
+    prod_3 = T*(T+alpha+1)
+    return ((1 + 1/(T+alpha))*cov_estim + (alpha/prod_3* prod_1 / prod_2)) #Permet d'optimiser la complexité si alpha est une liste
+
+#Pour implémenter Ledoit Wolf par nous même?
 
 def pi_i_j(cov_estim,i,j):
     val = 0
@@ -156,7 +171,3 @@ def gamma(phi,cov_estim):
         for j in range(d):
             val+= (phi[i,j] - cov_estim[i,j])**2
     return val
-
-def LedoitWolf(phi,cov_estim,rho_mean):
-    coeff = max(0,min(1/T * (pi(cov_estim) - rho(cov_estim,rho_mean))/gamma(phi,cov_estim),1))
-    return coeff*phi + (1-coeff)*cov
