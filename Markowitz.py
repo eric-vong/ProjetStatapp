@@ -111,8 +111,14 @@ def shrinkage(alpha,cov_estim): #A voir si on prend en paramètre une liste alph
     inv_cov_estim = np.linalg.inv(cov_estim)
     prod_1 = e@e.T
     prod_2 = e.T@inv_cov_estim@e
-    prod_3 = T*(T+alpha+1)
-    return ((1 + 1/(T+alpha))*cov_estim + (alpha/prod_3* prod_1 / prod_2)) #Permet d'optimiser la complexité si alpha est une liste
+    return ((1 + 1/(T+alpha))*cov_estim + (alpha/(T*(T+alpha+1)) * prod_1 / prod_2)) #Permet d'optimiser la complexité si alpha est une liste
+
+def bayes_stein(mean,cov,alpha_list,sample_size = 250): #Quelle valeur de alpha choisir? Comparer les valeurs propres?
+    sample,mean_estim,cov_estim = sample_generation(mean,cov,sample_size)
+    cov_bayes_stein = []
+    for alpha in alpha_list:
+        cov_bayes_stein.append(shrinkage(alpha,cov_estim))
+    return cov_bayes_stein
 
 #Pour implémenter Ledoit Wolf par nous même?
 
