@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from math import sqrt
 import time
+from sklearn.covariance import LedoitWolf
 
 df = pd.read_csv(r'F:\Desktop\Projet_Statapp\data\CAC40.csv', sep=';',decimal=',',header=0)
 start = '23-10-2010'
@@ -80,15 +81,14 @@ def markowitz_weight(inv_cov,mean,risk_aversion_list):
     alpha = (e.T@inv_cov@mean)/risk_aversion_list
     return ((1-alpha) * min_variance_portfolio.reshape(-1,1).repeat(risk_aversion_list.shape[0],axis=1) + alpha*market_portfolio.reshape(-1,1).repeat(risk_aversion_list.shape[0],axis=1)).T #Permet de tout vectorialiser, pas besoin de recalculer min_variance à chaque fois
 
-def R_sigma_computation(mean,cov,risk_aversion_list):
-    inv_cov = np.linalg.inv(cov)
+def R_sigma_computation(mean,inv_cov,multcov,risk_aversion_list): #Le paramètre multcov permet d'afficher soit théorique ou réalisée (multcov = cov), soit estimée (multcov = cov_estim)
     min_var,market=markowitz_portfolio(inv_cov,mean)
     alpha = (e.T@inv_cov@mean)/risk_aversion_list
     val_R1,val_R2 = mean@min_var,mean@market
-    val_sigma1,val_sigma2,val_sigma3 = min_var.T@cov@min_var,market.T@cov@market,min_var.T@cov@market+market.T@cov@min_var
+    val_sigma1,val_sigma2,val_sigma3 = min_var.T@multcov@market,market.T@multcov@market,min_var.T@multcov@market+market.T@multcov@min_var
     R = (1-alpha)*val_R1+alpha*val_R2
     sigma = (1-alpha)*(1-alpha)*val_sigma1+alpha*alpha*val_sigma2+alpha*(1-alpha)*val_sigma3
-    return R,sigma
+    return R,sigma 
 
 def markowitz_front1(mean,cov,sample_size = 250,lambdas=100):
     inv_cov = np.linalg.inv(cov)
@@ -106,20 +106,33 @@ def markowitz_front2(mean,cov,sample_size = 250,lambdas=100):
     R_theory,sigma_theory = R_sigma_computation(mean,cov,risk_aversion_list)
     return R_theory, sigma_theory
 
+def markowitz_front_realised(mean,cov,sample_size = 250,lambdas=100,theory=True,lw=False): #Génère un échantillon et calcule les frontières efficientes réalisées si True sinon estimées (comparées à la théorie ou non)
+    sample,mean_estim,cov_estim= sample_generation(mean,cov,sample_size)
+    if lw : #Si on estime via Ledoit Wolf, éventuellement si plus à ajouter on remplace cov_estim dans le calcul en le mettant en argument dans la fonction
+        LW = LedoitWolf().fit(sample)
+        cov_estim = LW.covariance_
+    inv_cov_estim = np.linalg.inv(cov_estim)
+    risk_aversion_list = np.linspace(1,2**4,lambdas)
+    if theory:
+        multcov = cov
+    else :
+        multcov = cov_estim
+    R,sigma = R_sigma_computation(mean,inv_cov_estim,multcov,risk_aversion_list)      
+    return R,sigma
+
+mean,cov = mean_cov_dataframe(df)
+
 def speed(test=100,lambdas = 100):
     temps1,temps2 = 0,0
-    #for _ in range(test):
-    #    a = time.time()
-    #    markowitz_front1(mean,cov,sample_size=1024)
-    #    temps1+= time.time()-a
-    R,sigma = np.zeros(lambdas),np.zeros(lambdas)
     for _ in range(test):
         a = time.time()
-        Rp,sigmap = markowitz_front2(mean,cov,sample_size=2**14,lambdas=lambdas)
-        R+= Rp
-        sigma+= sigmap
+        markowitz_front_realised(mean,cov,lw=True)
+        temps1+= time.time()-a
+    for _ in range(test):
+        a = time.time()
+        markowitz_front_realised(mean,cov)
         temps2+= time.time()-a
-    print(temps1/test,temps2/test*10000)
+    print(temps1/test,temps2/test)
 
 speed()
 
