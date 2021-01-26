@@ -6,6 +6,8 @@ from math import sqrt
 import time
 
 df = pd.read_csv(r'F:\Desktop\Projet_Statapp\data\CAC40.csv', sep=';',decimal=',')
+#df = pd.read_csv('C:/Users/rapha/OneDrive/Documents/ENSAE Travail/2A/StatApp/ProjetStatapp/data/CAC40.csv', sep=';',decimal=',')
+
 start = '23-10-2010'
 end = '23-10-2020'
 df = df.drop(columns=['DATES','WLN FP Equity']) #On supprime les dates et la dernière colonne, entrée trop tardive
