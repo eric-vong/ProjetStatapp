@@ -90,7 +90,7 @@ def R_sigma_computation(mean,inv_cov,multcov,risk_aversion_list): #Le paramètre
     sigma = (1-alpha)*(1-alpha)*val_sigma1+alpha*alpha*val_sigma2+alpha*(1-alpha)*val_sigma3
     return R,sigma 
 
-def markowitz_front1(mean,cov,sample_size = 250,lambdas=100):
+def markowitz_front1(mean,cov,sample_size = 250,lambdas=100): #Calcul par définition de R et sigma
     inv_cov = np.linalg.inv(cov)
     sample,mean_estim,cov_estim= sample_generation(mean,cov)
     inv_cov_estim = np.linalg.inv(cov_estim)
@@ -99,12 +99,26 @@ def markowitz_front1(mean,cov,sample_size = 250,lambdas=100):
     sigma_theory = [markowitz_sol.T@cov@markowitz_sol for markowitz_sol in markowitz_weight(inv_cov,mean,risk_aversion_list)]
     return R_theory, sigma_theory
 
-def markowitz_front2(mean,cov,sample_size = 250,lambdas=100):
+def markowitz_front2(mean,cov,sample_size = 250,lambdas=100): #Retenir en mémoire le produit matriciel
     sample,mean_estim,cov_estim= sample_generation(mean,cov,sample_size = sample_size)
     inv_cov_estim = np.linalg.inv(cov_estim)
     risk_aversion_list = np.linspace(1,2**8,lambdas)
-    R_theory,sigma_theory = R_sigma_computation(mean,cov,risk_aversion_list)
+    R_theory,sigma_theory = R_sigma_computation(mean,cov,cov,risk_aversion_list)
     return R_theory, sigma_theory
+
+def speed_front(test=100,lambdas = 100): #On test sur 100 itérations et 100 valeurs différents de lambda la différence entre front1 et front2
+    temps1,temps2 = 0,0
+    for _ in range(test):
+        a = time.time()
+        markowitz_front1(mean,cov)
+        temps1+= time.time()-a
+    for _ in range(test):
+        a = time.time()
+        markowitz_front2(mean,cov)
+        temps2+= time.time()-a
+    print(temps1/test,temps2/test)
+
+speed_front() #
 
 def markowitz_front_realised(mean,cov,sample_size = 250,lambdas=100,theory=True,lw=False): #Génère un échantillon et calcule les frontières efficientes réalisées si True sinon estimées (comparées à la théorie ou non)
     sample,mean_estim,cov_estim= sample_generation(mean,cov,sample_size)
@@ -120,6 +134,17 @@ def markowitz_front_realised(mean,cov,sample_size = 250,lambdas=100,theory=True,
     R,sigma = R_sigma_computation(mean,inv_cov_estim,multcov,risk_aversion_list)      
     return R,sigma
 
+def speed_lw(test=100,lambdas = 100): #On test sur 100 itérations et 100 valeurs différents de lambda la différence entre lw=True ou lw=False
+    temps1,temps2 = 0,0
+    for _ in range(test):
+        a = time.time()
+        markowitz_front_realised(mean,cov,lw=True)
+        temps1+= time.time()-a
+    for _ in range(test):
+        a = time.time()
+        markowitz_front_realised(mean,cov)
+        temps2+= time.time()-a
+    print(temps1/test,temps2/test)
 mean,cov = mean_cov_dataframe(df)
 
 def speed(test=100,lambdas = 100):
@@ -153,3 +178,36 @@ def test_affectation(test=10000,condition = False):
     print(temps1/test,temps2/test)
 
 #test_affectation() #Résultat pas étonnant, le deuxième test doit évaluer deux fois condition
+
+def ledoit_wolf_shrink1(cov_estim,sample): #Renvoie de la matrice de covariance shrinké par ledoit wolf
+    d = np.shape(cov_estim)[0]
+    m = np.trace(cov_estim)/d
+    d_est = np.linalg.norm(cov_estim - m*np.identity(d))**2/d
+    b_barre = 0 
+    for observation in sample:
+        matrice_annexe = np.array([observation])
+        prod = matrice_annexe.T@matrice_annexe
+        b_barre+= np.linalg.norm(prod - cov_estim)**2
+    b_barre = b_barre/(d*len(sample)**2)
+    b = min(b_barre,d_est)
+    a = d_est - b
+    return b/d_est*m*np.identity(d)+a/d_est*cov_estim
+
+def ledoit_wolf_shrink2(cov_estim,sample): #Renvoie de la matrice de covariance shrinké par ledoit wolf scikit
+    lw = LedoitWolf().fit(sample)
+    return lw
+
+def speedtest_lw(mean,cov,sample_size=250,test=5000): #speedtest entre scikit et notre implémentation
+    temps1,temps2 = 0,0
+    sample,mean_estim,cov_estim= sample_generation(mean,cov,sample_size)
+    for _ in range(test):
+        a = time.time()
+        ledoit_wolf_shrink1(cov_estim,sample)
+        temps1+= time.time() - a
+    for _ in range(test):
+        a = time.time()
+        ledoit_wolf_shrink2(cov_estim,sample)
+        temps2+= time.time() - a
+    print(temps1/test,temps2/test)
+
+speedtest_lw(mean,cov)
