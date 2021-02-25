@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from sklearn.covariance import LedoitWolf
 from math import sqrt
 import time
+import scipy.stats
 
 df = pd.read_csv(r'F:\Desktop\Projet_Statapp\data\CAC40.csv', sep=';',decimal=',')
 #df = pd.read_csv('C:/Users/rapha/OneDrive/Documents/ENSAE Travail/2A/StatApp/ProjetStatapp/data/CAC40.csv', sep=';',decimal=',')
@@ -161,35 +162,51 @@ def eigvals_density(mean,cov,sample_size = 250,iteration=100,nombre_bins = 100):
     occurrence = np.zeros(nombre_bins)
     for _ in range(iteration):
         sample,mean_estim,cov_estim = sample_generation(mean,cov,sample_size)
+        #sample = sample - mean_estim #peut-être, pas sûr
         corr_estim = np.cov((sample/np.sqrt(np.diag(cov_estim))).T)
         sample_eigvals = np.linalg.eigvalsh(corr_estim)
         occurrence+=plt.hist(sample_eigvals,bins=bins)[0]
     return occurrence/iteration,bins[1:]
 
-def marcenko_pastur_density(Q,std_err,points_number = 2500):
-    v = std_err**2
-    eigval_max = v*(1+sqrt(1/Q))**2
-    eigval_min = v*(1-sqrt(1/Q))**2
-    factor = Q/(2*np.pi*v)
+def fit_Q_std_err(data):
+    mean = np.mean(data)
+    var = np.var(data)
+    #skw = scipy.stats.skew(data)
+    #kurt = scipy.stats.kurtosis(data,fisher=False)
+    Q = mean**2/var #Selon Variance
+    #Q2 = skw**2 #Selon Skewness
+    #Q3 = kurt - 2 #Selon Kurtosis
+    sigma2 = mean
+    #sigma22 = sqrt(std/Q1) #ptêt le bon?
+    #sigma23 = sqrt(std/Q)
+    #sigma24 = sqrt(std/Q3)
+    return Q,sigma2
+
+def marcenko_pastur_density(Q,sigma2,points_number = 100):
+    #Q,sigma2 = fit_Q_std_err(data)
+    eigval_max = sigma2*(1+sqrt(1/Q))**2
+    eigval_min = sigma2*(1-sqrt(1/Q))**2
+    factor = Q/(2*np.pi*sigma2)   
     points = np.linspace(eigval_min,eigval_max,points_number)
     val1 = eigval_max - points
     val2 = points - eigval_min
     val = np.sqrt(val1*val2)
     rho = factor*(val/points)
-    return rho,points
+    return rho,points,np.mean(rho),np.std(rho)
 
-q = len(df)/d
-
-density,bins = eigvals_density(mean,cov,iteration=200,nombre_bins = 100)
-marcenko_pastur,points = marcenko_pastur_density(4,0.7) #Q = 4, \sigma = 0.75
+density,bins = eigvals_density(mean,cov,iteration=100,nombre_bins = 100) #Qsigma
+Q,sigma2 = fit_Q_std_err(density)
+marcenko_pastur,points,val1,val2 = marcenko_pastur_density(Q,sigma2)
 plt.clf()
 plt.xlabel('$\lambda$')
 plt.ylabel('densité')
 plt.title('Densité des valeurs propres de la matrice de corrélation empirique')
-plt.bar(bins,density,color='red',label='density',width = 0.01)
-plt.plot(points,marcenko_pastur,color='blue',label='marcenko-pastur')
+#plt.bar(bins,density,color='red',label='density',width = 0.01)
+#plt.plot(points,marcenko_pastur,color='blue',label='marcenko-pastur')
+plt.hist(np.histogram(density,bins=100)[1])
 plt.legend()
 plt.show()
+val1,val2,np.mean(density),np.std(density)
 
 def denoise_rmt_chosen(cov_estim,k=0): 
     diag = np.sqrt(np.diag(cov_estim))
@@ -198,7 +215,7 @@ def denoise_rmt_chosen(cov_estim,k=0):
     corr_estim = diag_mat_inv@cov_estim@diag_mat_inv
     eigvals,eigvect = np.linalg.eigh(corr_estim) #valeurs propres + vecteurs propres
     threshold = np.mean(eigvals[:-(k+1)]) #On prend la moyenne des 38-k valeurs propres
-    eigvals[eigvals < threshold] = threshold
+    eigvals[eigvals < threshold] = threshold #threshold = lambda+ de marchenko_pastur plus tard?
     eigvals = np.sum(eigvals)/d*eigvals#On renormalise, d = Tr(corr_estim)
     retour = eigvect@np.diag(eigvals)@np.linalg.inv(eigvect) #On la dédiagonalise
     return diag_mat@retour@diag_mat
