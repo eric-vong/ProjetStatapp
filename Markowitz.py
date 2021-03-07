@@ -6,17 +6,18 @@ from math import sqrt
 import time
 import scipy.stats
 
-df = pd.read_csv(r'F:\Desktop\Projet_Statapp\data\CAC40.csv', sep=';',decimal=',')
+df = pd.read_csv(r'F:\Desktop\Projet_Statapp\data\SPX_Data.csv', sep=';',decimal=',')
 #df = pd.read_csv('C:/Users/rapha/OneDrive/Documents/ENSAE Travail/2A/StatApp/ProjetStatapp/data/CAC40.csv', sep=';',decimal=',')
 
 start = '23-10-2010'
 end = '23-10-2020'
-df = df.drop(columns=['DATES','WLN FP Equity']) #On supprime les dates et la dernière colonne, entrée trop tardive
+df = df.drop(columns=['DATES']) #On supprime les dates
 df = df.dropna() #On enlève toutes les lignes où il manque au moins une donnée
 df = df.reset_index(drop=True) #On réordonne les indices, faire attention pas toujours bien si on veut calculer le return monthly
 df = df.apply(lambda x: 100*x/x[0]) #On normalise 
 returns_daily = df.apply(lambda x: (x/(x.shift(1))-1)) #Retours journaliers
 returns_daily = returns_daily.iloc[1:] #On enlève la première ligne de NaN.
+returns_daily = returns_daily.iloc[:-250]
 d = len(df.columns) #Nombre de colonnes
 T = len(df) #Nombre de lignes
 e = np.ones(d)
@@ -119,6 +120,72 @@ def markowitz_monte_carlo(mean,cov,k,lambdas = 100,lw=False): #Processus de Mont
         sigma_monte_carlo+= sigma_realised
     return R_monte_carlo/M,sigma_monte_carlo/M
 
+def eigvals_density(mean,cov,sample_size = 250,iteration=100,nombre_bins = 100): #Trace la densité empirique des valeurs propres
+    bins = np.linspace(0,30,nombre_bins+1) #Les valeurs propres sont comprises entre 0 et 2.5 empiriquement, on met 3 pour être sûr
+    occurrence = np.zeros(nombre_bins)
+    for _ in range(iteration):
+        sample,mean_estim,cov_estim = sample_generation(mean,cov,sample_size)
+        corr_estim = np.cov((sample/np.sqrt(np.diag(cov_estim))).T)
+        sample_eigvals = np.linalg.eigvalsh(corr_estim)
+        occurrence+=plt.hist(sample_eigvals,bins=bins,density=True)[0]
+    return occurrence/iteration,(bins[1:]+bins[:-1])*0.5
+
+def fit_Q_std_err(data): #On fit l'histogramme à une densité de Marcenko Pastur
+    mean = np.mean(data)
+    var = np.var(data)
+    #skw = scipy.stats.skew(data)
+    #kurt = scipy.stats.kurtosis(data,fisher=False)
+    Q = mean**2/var #Selon Variance
+    #Q2 = skw**2 #Selon Skewness
+    #Q3 = kurt - 2 #Selon Kurtosis
+    sigma2 = mean
+    #sigma22 = sqrt(std/Q1)
+    #sigma23 = sqrt(std/Q)
+    #sigma24 = sqrt(std/Q3)
+    return Q,sigma2
+
+def marcenko_pastur_density(Q,sigma2,points_number = 100):
+    #Q,sigma2 = fit_Q_std_err(data)
+    eigval_max = sigma2*(1+sqrt(1/Q))**2
+    eigval_min = sigma2*(1-sqrt(1/Q))**2
+    factor = Q/(2*np.pi*sigma2)   
+    points = np.linspace(eigval_min,eigval_max,points_number)
+    val1 = eigval_max - points
+    val2 = points - eigval_min
+    val = np.sqrt(val1*val2)
+    rho = factor*(val/points)
+    return rho,points
+
+def denoise_rmt_chosen(cov_estim,Q):
+    threshold = (1+np.sqrt(1/Q))**2
+    diag = np.sqrt(np.diag(cov_estim))
+    diag_mat = np.diag(diag)
+    diag_mat_inv = np.diag(1/diag)
+    corr_estim = diag_mat_inv@cov_estim@diag_mat_inv
+    eigvals,eigvect = np.linalg.eigh(corr_estim) #valeurs propres + vecteurs propres
+    moyenne = np.mean(eigvals[eigvals < threshold]) #On prend la moyenne des 38-k valeurs propres, on enlève au moins la dernière car elle va perturber bcp la moyenne
+    eigvals[eigvals < threshold] = moyenne #threshold = lambda+ de marchenko_pastur plus tard?
+    retour = eigvect@np.diag(eigvals)@np.linalg.inv(eigvect) #On la dédiagonalise
+    return diag_mat@retour@diag_mat
+
+def comparison_rmt(mean,cov,sample_size = 250, lambdas = 100): #RMT, LedoitWolf et estimateur empirique sur le même sample
+    sample,mean_estim,cov_estim= sample_generation(mean,cov,sample_size)
+    Q = sample_size/d
+    cov_estim_rmt = denoise_rmt_chosen(cov_estim,Q)
+    cov_estim_lw = ledoit_wolf_shrink(cov_estim,sample)
+    cov_estim_rmt_lw = denoise_rmt_chosen(cov_estim_lw,Q)
+    inv_cov_estim,inv_cov_estim_rmt,inv_cov_estim_lw = np.linalg.inv(cov_estim),np.linalg.inv(cov_estim_rmt),np.linalg.inv(cov_estim_lw)
+    inv_cov_estim_rmt_lw = np.linalg.inv(cov_estim_rmt_lw)
+    risk_aversion_list = np.linspace(1,2**4,lambdas)
+    R,sigma = R_sigma_computation(mean,inv_cov_estim,cov,risk_aversion_list)
+    R_rmt,sigma_rmt = R_sigma_computation(mean,inv_cov_estim_rmt,cov,risk_aversion_list)
+    R_lw,sigma_lw = R_sigma_computation(mean,inv_cov_estim_lw,cov,risk_aversion_list)
+    R_rmt_lw,sigma_rmt_lw = R_sigma_computation(mean,inv_cov_estim_rmt_lw,cov,risk_aversion_list)
+    return R,sigma,R_rmt,sigma_rmt,R_lw,sigma_lw,R_rmt_lw,sigma_rmt_lw
+
+
+###Comparaison entre Ledoit Wolf, Ledoit Wolf avec passage en corrélation et estimateur empirique
+
 mean,cov = mean_cov_dataframe(returns_daily) #Moyenne et covariance théorique
 R_theory,sigma_theory = markowitz_front_theory(mean,cov,lambdas = 100)
 #R_realised,sigma_realised = markowitz_front_realised(mean,cov)
@@ -126,7 +193,7 @@ R_theory,sigma_theory = markowitz_front_theory(mean,cov,lambdas = 100)
 #R_estimated,sigma_estimated = markowitz_front_realised(mean,cov,theory = False)
 #R_monte_carlo9,sigma_monte_carlo9 = markowitz_monte_carlo(mean,cov,9,lambdas = 100)
 #R_monte_carlo_lw9,sigma_monte_carlo_lw9 = markowitz_monte_carlo(mean,cov,9,lambdas = 100,lw=True)
-R_non_shrink,sigma_non_shrink,R_shrink_corr,sigma_shrink_corr,R_shrink,sigma_shrink = comparison_ledoit_wolf(mean,cov,sample_size=500,lambdas = 100)
+R_non_shrink,sigma_non_shrink,R_shrink_corr,sigma_shrink_corr,R_shrink,sigma_shrink = comparison_ledoit_wolf(mean,cov,sample_size=2500,lambdas = 100)
 
 plt.xlabel('$\sigma_p$')
 plt.ylabel('$R_p$')
@@ -144,106 +211,33 @@ plt.legend()
 plt.plot()
 plt.show()
 
-sample,mean_estim,cov_estim = sample_generation(mean,cov,sample_size=250)
-bins = np.append(np.linspace(0,2.5,100),np.linspace(16,24,8*40))
-plt.xlabel('$\lambda$')
-plt.ylabel('Ocurrence')
-plt.title('Valeurs propres de la matrice théorique et de la matrice estimée')
-eigvals_theory = np.linalg.eigvalsh(cov)
-eigvals_estimated = np.linalg.eigvalsh(cov_estim)
-plt.hist(eigvals_theory,bins=bins,color='red',label='theory')
-plt.hist(eigvals_estimated,bins=bins,color='blue',label='estimated')
-plt.plot()
-plt.legend()
-plt.show()
+###Fitting Marcenko-Pastur à la densité empirique
 
-def eigvals_density(mean,cov,sample_size = 250,iteration=100,nombre_bins = 100):
-    bins = np.linspace(0,3,nombre_bins+1) #Les valeurs propres sont comprises entre 0 et 2.5 empiriquement, on met 3 pour être sûr
-    occurrence = np.zeros(nombre_bins)
-    for _ in range(iteration):
-        sample,mean_estim,cov_estim = sample_generation(mean,cov,sample_size)
-        #sample = sample - mean_estim #peut-être, pas sûr
-        corr_estim = np.cov((sample/np.sqrt(np.diag(cov_estim))).T)
-        sample_eigvals = np.linalg.eigvalsh(corr_estim)
-        occurrence+=plt.hist(sample_eigvals,bins=bins)[0]
-    return occurrence/iteration,bins[1:]
-
-def fit_Q_std_err(data):
-    mean = np.mean(data)
-    var = np.var(data)
-    #skw = scipy.stats.skew(data)
-    #kurt = scipy.stats.kurtosis(data,fisher=False)
-    Q = mean**2/var #Selon Variance
-    #Q2 = skw**2 #Selon Skewness
-    #Q3 = kurt - 2 #Selon Kurtosis
-    sigma2 = mean
-    #sigma22 = sqrt(std/Q1) #ptêt le bon?
-    #sigma23 = sqrt(std/Q)
-    #sigma24 = sqrt(std/Q3)
-    return Q,sigma2
-
-def marcenko_pastur_density(Q,sigma2,points_number = 100):
-    #Q,sigma2 = fit_Q_std_err(data)
-    eigval_max = sigma2*(1+sqrt(1/Q))**2
-    eigval_min = sigma2*(1-sqrt(1/Q))**2
-    factor = Q/(2*np.pi*sigma2)   
-    points = np.linspace(eigval_min,eigval_max,points_number)
-    val1 = eigval_max - points
-    val2 = points - eigval_min
-    val = np.sqrt(val1*val2)
-    rho = factor*(val/points)
-    return rho,points,np.mean(rho),np.std(rho)
-
-density,bins = eigvals_density(mean,cov,iteration=100,nombre_bins = 100) #Qsigma
-Q,sigma2 = fit_Q_std_err(density)
+#density,bins = eigvals_density(mean,cov,iteration=100,nombre_bins = 50) 
+Q,sigma2 = fit_Q_std_err(density) #On fit Q, sigma avec les moments
 marcenko_pastur,points,val1,val2 = marcenko_pastur_density(Q,sigma2)
 plt.clf()
 plt.xlabel('$\lambda$')
 plt.ylabel('densité')
 plt.title('Densité des valeurs propres de la matrice de corrélation empirique')
-#plt.bar(bins,density,color='red',label='density',width = 0.01)
+plt.bar(bins,density,color='black',label='density',width = bins[1]) 
 #plt.plot(points,marcenko_pastur,color='blue',label='marcenko-pastur')
-plt.hist(np.histogram(density,bins=100)[1])
 plt.legend()
 plt.show()
-val1,val2,np.mean(density),np.std(density)
 
-def denoise_rmt_chosen(cov_estim,k=0): 
-    diag = np.sqrt(np.diag(cov_estim))
-    diag_mat = np.diag(diag)
-    diag_mat_inv = np.diag(1/diag)
-    corr_estim = diag_mat_inv@cov_estim@diag_mat_inv
-    eigvals,eigvect = np.linalg.eigh(corr_estim) #valeurs propres + vecteurs propres
-    threshold = np.mean(eigvals[:-(k+1)]) #On prend la moyenne des 38-k valeurs propres
-    eigvals[eigvals < threshold] = threshold #threshold = lambda+ de marchenko_pastur plus tard?
-    eigvals = np.sum(eigvals)/d*eigvals#On renormalise, d = Tr(corr_estim)
-    retour = eigvect@np.diag(eigvals)@np.linalg.inv(eigvect) #On la dédiagonalise
-    return diag_mat@retour@diag_mat
+###Comparaison entre estimateur empirique, RMT, RMT sur Ledoit Wolf
 
-def comparison_rmt(mean,cov,sample_size = 250, lambdas = 100,k=0):
-    sample,mean_estim,cov_estim= sample_generation(mean,cov,sample_size)
-    cov_estim_rmt = denoise_rmt_chosen(cov_estim,k)
-    cov_estim_lw = ledoit_wolf_shrink(cov_estim,sample)
-    cov_estim_rmt_lw = denoise_rmt_chosen(cov_estim_lw,k)
-    inv_cov_estim,inv_cov_estim_rmt,inv_cov_estim_lw = np.linalg.inv(cov_estim),np.linalg.inv(cov_estim_rmt),np.linalg.inv(cov_estim_lw)
-    inv_cov_estim_rmt_lw = np.linalg.inv(cov_estim_rmt_lw)
-    risk_aversion_list = np.linspace(1,2**4,lambdas)
-    R,sigma = R_sigma_computation(mean,inv_cov_estim,cov,risk_aversion_list)
-    R_rmt,sigma_rmt = R_sigma_computation(mean,inv_cov_estim_rmt,cov,risk_aversion_list)
-    R_lw,sigma_lw = R_sigma_computation(mean,inv_cov_estim_lw,cov,risk_aversion_list)
-    R_rmt_lw,sigma_rmt_lw = R_sigma_computation(mean,inv_cov_estim_rmt_lw,cov,risk_aversion_list)
-    return R,sigma,R_rmt,sigma_rmt,R_lw,sigma_lw,R_rmt_lw,sigma_rmt_lw
-
-R_empi,sigma_empi,R_rmt,sigma_rmt,R_shrink,sigma_shrink,R_rmt_lw,sigma_rmt_lw = comparison_rmt(mean,cov,sample_size=250,lambdas = 100)
-
+R_empi,sigma_empi,R_rmt,sigma_rmt,R_shrink,sigma_shrink,R_rmt_lw,sigma_rmt_lw = comparison_rmt(mean,cov,sample_size=500,lambdas = 100)
+#Tracer plusieurs sample_size pour mettre en évidence le bruit, changer ratio T/M
+plt.clf()
 plt.xlabel('$\sigma_p$')
 plt.ylabel('$R_p$')
 plt.title('Rendements en fonction de la variance d\'un portefeuille')
 plt.plot(sigma_theory,R_theory,color='black',label='theory',linewidth=5)
-plt.plot(sigma_empi,R_empi,color='blue',label='empirique')
+#plt.plot(sigma_empi,R_empi,color='blue',label='empirique')
 plt.plot(sigma_shrink,R_shrink,color='red',label='shrink')
-plt.plot(sigma_rmt,R_rmt,color='orange',label='rmt')
-plt.plot(sigma_rmt_lw,R_rmt_lw,color='purple',label='rmt + lw')
+plt.plot(sigma_rmt,R_rmt,color='green',label='rmt')
+plt.plot(sigma_rmt_lw,R_rmt_lw,color='brown',label='rmt + lw')
 plt.legend()
 plt.plot()
 plt.show()
