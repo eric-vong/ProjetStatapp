@@ -7,14 +7,14 @@ import time
 from cmath import sqrt as csqrt
 #import scipy.stats
 
-df = pd.read_csv(r'F:\Desktop\Projet_Statapp\data\CAC40.csv', sep=';',decimal=',')
+df = pd.read_csv(r'F:\Desktop\Projet_Statapp\data\SPX_Data.csv', sep=';',decimal=',')
 
 
 start = '23-10-2010'
 end = '23-10-2020'
 df = df.drop(columns=['DATES']) #On supprime les dates
-df = df.drop(columns=['WLN FP Equity'])
-#df = df.drop(columns=['ABBV UN Equity','PSX UN Equity','ADI UW Equity','KMI UN Equity','HCA UN Equity','FBHS UN Equity','MDLZ UW Equity','TXN UW Equity','HII UN Equity','XYL UN Equity','MPC UN Equity','WDC UW Equity','FANG UW Equity','NOW UN Equity','FB UW Equity','APTV UN Equity'])
+#df = df.drop(columns=['WLN FP Equity'])
+df = df.drop(columns=['ABBV UN Equity','PSX UN Equity','ADI UW Equity','KMI UN Equity','HCA UN Equity','FBHS UN Equity','MDLZ UW Equity','TXN UW Equity','HII UN Equity','XYL UN Equity','MPC UN Equity','WDC UW Equity','FANG UW Equity','NOW UN Equity','FB UW Equity','APTV UN Equity'])
 df = df.dropna() #On enlève toutes les lignes où il manque au moins une donnée
 df = df.reset_index(drop=True) #On réordonne les indices, faire attention pas toujours bien si on veut calculer le return monthly
 df = df.apply(lambda x: 100*x/x[0]) #On normalise 
@@ -196,17 +196,20 @@ def comparison(mean,corr,sigma_star,sigma_inf = 1,sample_size = 250, N = 100,wit
     sample,mean_estim,corr_estim= sample_generation(mean,corr,sample_size)
     Q = sample_size/d
     corr_estim_rmt = denoise_rmt_chosen(corr_estim,Q,with_inf)
+    corr_estim_rmt2 = denoise_rmt_chosen(corr_estim,Q,with_inf = True)
     corr_estim_lw = ledoit_wolf_shrink(corr_estim,sample)
     corr_estim_RIE = rieCov(sample)
     inv_corr_estim = np.linalg.inv(corr_estim)
     inv_corr_estim_rmt = np.linalg.inv(corr_estim_rmt)
+    inv_corr_estim_rmt2 = np.linalg.inv(corr_estim_rmt2)
     inv_corr_estim_lw = np.linalg.inv(corr_estim_lw)
     inv_corr_estim_RIE = np.linalg.inv(corr_estim_RIE)
     R,sigma = R_sigma_computation(mean,inv_corr_estim,corr,sigma_star,sigma_inf,N)
     R_rmt,sigma_rmt = R_sigma_computation(mean,inv_corr_estim_rmt,corr,sigma_star,sigma_inf,N)
+    R_rmt2,sigma_rmt2 = R_sigma_computation(mean,inv_corr_estim_rmt2,corr,sigma_star,sigma_inf,N)
     R_lw,sigma_lw = R_sigma_computation(mean,inv_corr_estim_lw,corr,sigma_star,sigma_inf,N)
     R_RIE,sigma_RIE = R_sigma_computation(mean,inv_corr_estim_RIE,corr,sigma_star,sigma_inf,N)
-    return R,sigma,R_rmt,sigma_rmt,R_lw,sigma_lw,R_RIE,sigma_RIE
+    return R,sigma,R_rmt,sigma_rmt,R_lw,sigma_lw,R_RIE,sigma_RIE,R_rmt2,sigma_rmt2
 
 #Initialisation des données:
 
@@ -234,7 +237,7 @@ plt.show()
 
 ###Comparaison entre estimateur empirique, RMT, RMT sur Ledoit Wolf
 
-R_empi,sigma_empi,R_rmt,sigma_rmt,R_shrink,sigma_shrink,R_RIE,sigma_RIE = comparison(mean,corr,10,sample_size=60)
+R_empi,sigma_empi,R_rmt,sigma_rmt,R_shrink,sigma_shrink,R_RIE,sigma_RIE,R_rmt2,sigma_rmt2 = comparison(mean,corr,10,sample_size=1250)
 #Tracer plusieurs sample_size pour mettre en évidence le bruit, changer ratio T/M
 plt.clf()
 plt.xlabel('$\sigma_p$')
@@ -242,9 +245,10 @@ plt.ylabel('$R_p$')
 plt.title('Rendements en fonction de la variance d\'un portefeuille')
 plt.plot(sigma_theory,R_theory,color='black',label='theory',linewidth=5)
 #plt.plot(sigma_empi,R_empi,color='blue',label='empirique') #Inversibilité limitée
-plt.plot(sigma_shrink,R_shrink,color='red',label='shrink')
-plt.plot(sigma_rmt,R_rmt,color='green',label='rmt')
-plt.plot(sigma_RIE,R_RIE,color='purple',label='RIE')
+#plt.plot(sigma_shrink,R_shrink,color='red',label='shrink')
+plt.plot(sigma_rmt,R_rmt,color='green',label='rmt $\lambda_{+}$')
+plt.plot(sigma_rmt2,R_rmt2,color='red',label='rmt $\lambda_{+},\lambda_{-}$')
+#plt.plot(sigma_RIE,R_RIE,color='purple',label='RIE')
 plt.legend()
 plt.plot()
 plt.show()
