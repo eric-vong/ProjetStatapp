@@ -1,24 +1,24 @@
 import numpy as np
 import pandas as pd 
 import matplotlib.pyplot as plt
-#from sklearn.covariance import LedoitWolf
+from sklearn.covariance import LedoitWolf
 from math import sqrt
 import time
+from cmath import sqrt as csqrt
 #import scipy.stats
 
-df = pd.read_csv(r'F:\Desktop\Projet_Statapp\data\CAC40.csv', sep=';',decimal=',')
+df = pd.read_csv(r'F:\Desktop\Projet_Statapp\data\SPX_Data.csv', sep=';',decimal=',')
 
 start = '23-10-2010'
 end = '23-10-2020'
 df = df.drop(columns=['DATES']) #On supprime les dates
-df = df.drop(columns=['WLN FP Equity'])
-#df = df.drop(columns=['ABBV UN Equity','PSX UN Equity','ADI UW Equity','KMI UN Equity','HCA UN Equity','FBHS UN Equity','MDLZ UW Equity','TXN UW Equity','HII UN Equity','XYL UN Equity','MPC UN Equity','WDC UW Equity','FANG UW Equity','NOW UN Equity','FB UW Equity','APTV UN Equity'])
+#df = df.drop(columns=['WLN FP Equity'])
+df = df.drop(columns=['ABBV UN Equity','PSX UN Equity','ADI UW Equity','KMI UN Equity','HCA UN Equity','FBHS UN Equity','MDLZ UW Equity','TXN UW Equity','HII UN Equity','XYL UN Equity','MPC UN Equity','WDC UW Equity','FANG UW Equity','NOW UN Equity','FB UW Equity','APTV UN Equity'])
 df = df.dropna() #On enlève toutes les lignes où il manque au moins une donnée
 df = df.reset_index(drop=True) #On réordonne les indices, faire attention pas toujours bien si on veut calculer le return monthly
 df = df.apply(lambda x: 100*x/x[0]) #On normalise 
 returns_daily = df.apply(lambda x: (x/(x.shift(1))-1)) #Retours journaliers
 returns_daily = returns_daily.iloc[1:] #On enlève la première ligne de NaN.
-returns_daily = returns_daily.iloc[:-250]
 d = len(df.columns) #Nombre de colonnes
 T = len(df) #Nombre de lignes
 e = np.ones(d)
@@ -34,7 +34,7 @@ def mean_cov_dataframe(df): #On renvoie la moyenne + la covariance de la BDD
 def sample_generation(mean,corr,sample_size = 250): #Génération de l'échantillon + calcul de sa moyenne + covariance (à changer selon estimateur)
     sample = np.random.multivariate_normal(mean,corr,sample_size)
     sample_mean_estim = sample.mean(0)
-    sample_cov_estim = np.cov(sample.T,bias=False)
+    sample_cov_estim = np.cov(sample.T,bias=True)
     return sample,sample_mean_estim,sample_cov_estim
 
 def markowitz_portfolio(inv_corr,mean): #Donne le couple min_variance et market
@@ -52,8 +52,6 @@ def lambda_compute(mean,inv_corr,multcorr,sigma_star):
     res = a*x1**2+b*x1+c
     lambda_inf = 1/x1
     return lambda_inf
-
-#Problème pour le sigma frontière efficiente..
 
 def R_sigma_computation(mean,inv_corr,multcorr,sigma_star,sigma_inf, N): #Le paramètre multcov permet d'afficher soit théorique ou réalisée (multcov = cov), soit estimée (multcov = cov_estim)
     min_var,market=markowitz_portfolio(inv_corr,mean)
@@ -76,7 +74,6 @@ def markowitz_front_theory(mean,corr,sigma_star,sigma_inf=1, N=100): #Calcule la
 
 def markowitz_front_realised(mean,corr,sigma_star,sigma_inf=1,sample_size = 250,N=100,theory=True,LedoitWolf=False): #Génère un échantillon et calcule les frontières efficientes réalisées si True sinon estimées (comparées à la théorie ou non)
     sample,mean_estim,corr_estim= sample_generation(mean,corr,sample_size)
-    #Corr_estim n'est pas une corrélation, peut etre le faire?
     if LedoitWolf:
         corr_estim = ledoit_wolf_shrink(corr_estim,sample)
     inv_corr_estim = np.linalg.inv(corr_estim)
@@ -99,20 +96,92 @@ def ledoit_wolf_shrink(corr_estim,sample): #Renvoie la matrice de covariance emp
     b_barre = b_barre/(d*len(sample)**2)
     b = min(b_barre,d_est)
     a = d_est - b
-    #lw = LedoitWolf().fit(sample)
-    #coeff = lw.shrinkage_*d_est #b_barre scikit learn
+    lw = LedoitWolf().fit(sample)
+    #coeff = lw.shrinkage_#*d_est #b_barre scikit learn
+    #cov_lw = lw.covariance_
     shrink_corr = b/d_est*m*np.identity(d)+a/d_est*corr_estim
+    #print(shrink_corr,cov_lw)
+    #print(lw.shrinkage_,b/d_est)
     return shrink_corr
 
-def comparison_ledoit_wolf(mean,corr,sigma_star,sigma_inf = 1,sample_size = 250, N = 100):
-    sample,mean_estim,corr_estim= sample_generation(mean,corr,sample_size)
-    corr_estim_lw = ledoit_wolf_shrink(corr_estim,sample)
-    inv_corr_estim,inv_corr_estim_lw = np.linalg.inv(corr_estim),np.linalg.inv(corr_estim_lw)
-    R,sigma = R_sigma_computation(mean,inv_corr_estim,corr,sigma_star,sigma_inf,N)
-    R_lw,sigma_lw = R_sigma_computation(mean,inv_corr_estim_lw,corr,sigma_star,sigma_inf,N)
-    return R,sigma,R_lw,sigma_lw
+def denoise_rmt_chosen(cov_estim,Q,with_inf = False):
+    threshold_sup = (1+np.sqrt(1/Q))**2
+    threshold_inf = 0.
+    if with_inf :
+        threshold_inf = (1-np.sqrt(1/Q))**2
+    diag = np.sqrt(np.diag(cov_estim))
+    diag_mat = np.diag(diag)
+    diag_mat_inv = np.diag(1/diag)
+    corr_estim = diag_mat_inv@cov_estim@diag_mat_inv
+    eigvals,eigvect = np.linalg.eigh(corr_estim) #valeurs propres + vecteurs propres
+    moyenne = np.mean(eigvals[(eigvals < threshold_sup) & (eigvals > threshold_inf)]) #On prend la moyenne des valeurs propres
+    eigvals[(eigvals < threshold_sup) & (eigvals > threshold_inf)] = moyenne #Pour conserver la trace
+    retour = eigvect@np.diag(eigvals)@np.linalg.inv(eigvect) #On la dédiagonalise
+    return diag_mat@retour@diag_mat
 
-def markowitz_monte_carlo(mean,cov,sigma_star,sigma_inf = 1,k,N = 100,lw=False): #Processus de Monte-Carlo
+def stieltjes(z,q,lambda_sup,sigma2):
+    lambda_plus = lambda_sup*((1+csqrt(q))/(1-csqrt(q)))**2
+    lambda_plus = complex(lambda_plus,0)
+    nominator = z -csqrt((z-lambda_sup)*(z-lambda_plus))
+    return (nominator+ sigma2*(q-1))/(2*sigma2)
+
+stieltjes_marcenko_pastur = np.vectorize(stieltjes)
+    
+def RIE(corr,sample):
+    N = len(corr)
+    q = N/len(sample)
+    eigvals,eigvect = np.linalg.eigh(corr)
+    lambda_sup = eigvals[-1]
+    z = np.zeros(N,dtype=complex)
+    s = np.zeros(N,dtype=complex)
+    for k in range(N) :
+        z[k] = complex(eigvals[k],-1/sqrt(N))
+        s[k] = np.trace(z[k]*np.identity(N)-corr)
+    s = 1/s
+    s*= 1/N
+    sigma2 = lambda_sup/(1-sqrt(q))**2
+    khi_RIE = eigvals/abs(1-q+q*z*s)**2
+    gamma = abs(1-q+stieltjes_marcenko_pastur(z,q,lambda_sup,sigma2))**2/eigvals * sigma2
+    for val in gamma:
+        val = max(val,1)
+    khi_RIE = gamma*khi_RIE
+    retour = eigvect@np.diag(khi_RIE)@np.linalg.inv(eigvect)
+    return retour
+
+def gmp(z,q,sigma2,lambdaN):
+    lamb=lambdaN*((1+csqrt(q))/(1-csqrt(q)))
+    g=(z+sigma2*(q-1)-csqrt(z-lambdaN)*csqrt(z-lamb))/(2*q*z*sigma2)
+    return g
+
+def rieCov(returns):
+    cov=np.cov(returns.T)
+    diag = np.sqrt(np.diag(cov))
+    diag_mat = np.diag(diag)
+    diag_mat_inv = np.diag(1/diag)
+    estCorr = diag_mat_inv@cov@diag_mat_inv
+    eigVals, eigVects=np.linalg.eig(estCorr)
+    eigVals2=eigVals
+    N=len(cov)
+    q=N/len(returns)
+    lambdaN=np.max(eigVals)
+    sigma2=lambdaN/(1-sqrt(q))
+    for k in range(N):
+        zk=eigVals[k]-1j/sqrt(N)
+        sk=0
+        for i in range(N):
+            if i!=k:
+                sk=sk+1/(zk+eigVals[i])
+        sk=sk/N
+        Ek=eigVals[k]/(abs(1-q+q*zk*sk)**2)
+        gammak=sigma2*abs(1-q+q*zk*gmp(zk,q,sigma2,lambdaN))
+        if gammak>1:
+            eigVals2[k]=gammak*Ek
+        else:
+            eigVals2[k]=Ek
+    estCorr=eigVects@np.diag(eigVals2)@np.linalg.inv(eigVects)
+    return diag_mat@estCorr@diag_mat
+
+def markowitz_monte_carlo(mean,cov,sigma_star,k,sigma_inf = 1,N = 100,lw=False): #Processus de Monte-Carlo
     size = 2**k
     M = 10000
     R_monte_carlo,sigma_monte_carlo = np.zeros(N),np.zeros(N)
@@ -159,31 +228,29 @@ def marcenko_pastur_density(Q,sigma2,points_number = 100):
     rho = factor*(val/points)
     return rho,points
 
-def denoise_rmt_chosen(cov_estim,Q):
-    threshold = (1+np.sqrt(1/Q))**2
-    diag = np.sqrt(np.diag(cov_estim))
-    diag_mat = np.diag(diag)
-    diag_mat_inv = np.diag(1/diag)
-    corr_estim = diag_mat_inv@cov_estim@diag_mat_inv
-    eigvals,eigvect = np.linalg.eigh(corr_estim) #valeurs propres + vecteurs propres
-    moyenne = np.mean(eigvals[eigvals < threshold]) #On prend la moyenne des 38-k valeurs propres, on enlève au moins la dernière car elle va perturber bcp la moyenne
-    eigvals[eigvals < threshold] = moyenne #threshold = lambda+ de marchenko_pastur plus tard?
-    retour = eigvect@np.diag(eigvals)@np.linalg.inv(eigvect) #On la dédiagonalise
-    return diag_mat@retour@diag_mat
+def comparison_ledoit_wolf(mean,corr,sigma_star,sigma_inf = 1,sample_size = 250, N = 100):
+    sample,mean_estim,corr_estim= sample_generation(mean,corr,sample_size)
+    corr_estim_lw = ledoit_wolf_shrink(corr_estim,sample)
+    inv_corr_estim,inv_corr_estim_lw = np.linalg.inv(corr_estim),np.linalg.inv(corr_estim_lw)
+    R,sigma = R_sigma_computation(mean,inv_corr_estim,corr,sigma_star,sigma_inf,N)
+    R_lw,sigma_lw = R_sigma_computation(mean,inv_corr_estim_lw,corr,sigma_star,sigma_inf,N)
+    return R,sigma,R_lw,sigma_lw
 
-def comparison_rmt(mean,corr,sigma_star,sigma_inf = 1,sample_size = 250, N = 100): #RMT, LedoitWolf et estimateur empirique sur le même sample
+def comparison(mean,corr,sigma_star,sigma_inf = 1,sample_size = 250, N = 100,with_inf = False): #RMT, LedoitWolf et estimateur empirique sur le même sample
     sample,mean_estim,corr_estim= sample_generation(mean,corr,sample_size)
     Q = sample_size/d
-    corr_estim_rmt = denoise_rmt_chosen(corr_estim,Q)
+    corr_estim_rmt = denoise_rmt_chosen(corr_estim,Q,with_inf)
     corr_estim_lw = ledoit_wolf_shrink(corr_estim,sample)
-    corr_estim_rmt_lw = denoise_rmt_chosen(corr_estim_lw,Q)
-    inv_corr_estim,inv_corr_estim_rmt,inv_corr_estim_lw = np.linalg.inv(corr_estim),np.linalg.inv(corr_estim_rmt),np.linalg.inv(corr_estim_lw)
-    inv_corr_estim_rmt_lw = np.linalg.inv(corr_estim_rmt_lw)
+    corr_estim_RIE = rieCov(sample)
+    inv_corr_estim = np.linalg.inv(corr_estim)
+    inv_corr_estim_rmt = np.linalg.inv(corr_estim_rmt)
+    inv_corr_estim_lw = np.linalg.inv(corr_estim_lw)
+    inv_corr_estim_RIE = np.linalg.inv(corr_estim_RIE)
     R,sigma = R_sigma_computation(mean,inv_corr_estim,corr,sigma_star,sigma_inf,N)
     R_rmt,sigma_rmt = R_sigma_computation(mean,inv_corr_estim_rmt,corr,sigma_star,sigma_inf,N)
     R_lw,sigma_lw = R_sigma_computation(mean,inv_corr_estim_lw,corr,sigma_star,sigma_inf,N)
-    R_rmt_lw,sigma_rmt_lw = R_sigma_computation(mean,inv_corr_estim_rmt_lw,corr,sigma_star,sigma_inf,N)
-    return R,sigma,R_rmt,sigma_rmt,R_lw,sigma_lw,R_rmt_lw,sigma_rmt_lw
+    R_RIE,sigma_RIE = R_sigma_computation(mean,inv_corr_estim_RIE,corr,sigma_star,sigma_inf,N)
+    return R,sigma,R_rmt,sigma_rmt,R_lw,sigma_lw,R_RIE,sigma_RIE
 
 #Initialisation des données:
 
@@ -229,17 +296,17 @@ plt.show()
 
 ###Comparaison entre estimateur empirique, RMT, RMT sur Ledoit Wolf
 
-R_empi,sigma_empi,R_rmt,sigma_rmt,R_shrink,sigma_shrink,R_rmt_lw,sigma_rmt_lw = comparison_rmt(mean,corr,10,sample_size=250)
+R_empi,sigma_empi,R_rmt,sigma_rmt,R_shrink,sigma_shrink,R_RIE,sigma_RIE = comparison(mean,corr,10,sample_size=750)
 #Tracer plusieurs sample_size pour mettre en évidence le bruit, changer ratio T/M
 plt.clf()
 plt.xlabel('$\sigma_p$')
 plt.ylabel('$R_p$')
 plt.title('Rendements en fonction de la variance d\'un portefeuille')
 plt.plot(sigma_theory,R_theory,color='black',label='theory',linewidth=5)
-plt.plot(sigma_empi,R_empi,color='blue',label='empirique')
+#plt.plot(sigma_empi,R_empi,color='blue',label='empirique')
 plt.plot(sigma_shrink,R_shrink,color='red',label='shrink')
 plt.plot(sigma_rmt,R_rmt,color='green',label='rmt')
-plt.plot(sigma_rmt_lw,R_rmt_lw,color='brown',label='rmt + lw')
+plt.plot(sigma_RIE,R_RIE,color='purple',label='RIE')
 plt.legend()
 plt.plot()
 plt.show()
