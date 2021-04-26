@@ -9,7 +9,6 @@ from cmath import sqrt as csqrt
 
 df = pd.read_csv(r'F:\Desktop\Projet_Statapp\data\SPX_Data.csv', sep=';',decimal=',')
 
-
 start = '23-10-2010'
 end = '23-10-2020'
 df = df.drop(columns=['DATES']) #On supprime les dates
@@ -205,6 +204,7 @@ def comparison(mean,corr,sigma_star,sigma_inf = 1,sample_size = 250, N = 100,wit
     inv_corr_estim_lw = np.linalg.inv(corr_estim_lw)
     inv_corr_estim_RIE = np.linalg.inv(corr_estim_RIE)
     R,sigma = R_sigma_computation(mean,inv_corr_estim,corr,sigma_star,sigma_inf,N)
+    #R,sigma = 1,1
     R_rmt,sigma_rmt = R_sigma_computation(mean,inv_corr_estim_rmt,corr,sigma_star,sigma_inf,N)
     R_rmt2,sigma_rmt2 = R_sigma_computation(mean,inv_corr_estim_rmt2,corr,sigma_star,sigma_inf,N)
     R_lw,sigma_lw = R_sigma_computation(mean,inv_corr_estim_lw,corr,sigma_star,sigma_inf,N)
@@ -215,21 +215,30 @@ def comparison(mean,corr,sigma_star,sigma_inf = 1,sample_size = 250, N = 100,wit
 
 mean,corr=mean_cov_dataframe(returns_daily)
 
+#Spectre :
+
+plt.xlabel('$\lambda$')
+plt.ylabel('Occurrence')
+plt.title('Histogramme du spectre de la matrice de covariance')
+plt.hist(np.linalg.eigvalsh(corr))
+plt.show()
+
 ###Comparaison entre Ledoit Wolf, Ledoit Wolf avec passage en corrélation et estimateur empirique
 
 R_theory,sigma_theory = markowitz_front_theory(mean,corr,10)
-R_realised,sigma_realised = markowitz_front_realised(mean,corr,10,sample_size=1000)
+R_realised,sigma_realised = markowitz_front_realised(mean,corr,10,sample_size=500)
 #R_estimated,sigma_estimated = markowitz_front_realised(mean,corr,theory = False)
 R_monte_carlo7,sigma_monte_carlo7 = markowitz_monte_carlo(mean,corr,10,7,N = 100)
 
 
-plt.xlabel('$\sigma_p$')
-plt.ylabel('$R_p$')
+R_realised,sigma_realised = markowitz_front_realised(mean,corr,10,sample_size=2000)
+plt.xlabel('$\sigma$')
+plt.ylabel('$R$')
 plt.title('Rendements en fonction de la variance d\'un portefeuille')
 plt.plot(sigma_theory,R_theory,color='black',label='theory',linewidth=5)
 plt.plot(sigma_realised,R_realised,color='blue',label='realised')
 #plt.plot(sigma_realised_lw,R_realised_lw,color='orange',label='realised_lw')
-plt.plot(sigma_monte_carlo7,R_monte_carlo7,color='red',label='monte-carlo, k = 7')
+#plt.plot(sigma_monte_carlo7,R_monte_carlo7,color='red',label='monte-carlo, k = 7')
 #plt.plot(sigma_estimated,R_estimated,color='orange',label='estimated')
 plt.legend()
 plt.plot()
@@ -237,18 +246,18 @@ plt.show()
 
 ###Comparaison entre estimateur empirique, RMT, RMT sur Ledoit Wolf
 
-R_empi,sigma_empi,R_rmt,sigma_rmt,R_shrink,sigma_shrink,R_RIE,sigma_RIE,R_rmt2,sigma_rmt2 = comparison(mean,corr,10,sample_size=1250)
+R_empi,sigma_empi,R_rmt,sigma_rmt,R_shrink,sigma_shrink,R_RIE,sigma_RIE,R_rmt2,sigma_rmt2 = comparison(mean,corr,10,sample_size=1000)
 #Tracer plusieurs sample_size pour mettre en évidence le bruit, changer ratio T/M
 plt.clf()
-plt.xlabel('$\sigma_p$')
-plt.ylabel('$R_p$')
+plt.xlabel('$\sigma$')
+plt.ylabel('$R$')
 plt.title('Rendements en fonction de la variance d\'un portefeuille')
 plt.plot(sigma_theory,R_theory,color='black',label='theory',linewidth=5)
-#plt.plot(sigma_empi,R_empi,color='blue',label='empirique') #Inversibilité limitée
-#plt.plot(sigma_shrink,R_shrink,color='red',label='shrink')
+plt.plot(sigma_empi,R_empi,color='blue',label='empirique') #Inversibilité limitée
+plt.plot(sigma_shrink,R_shrink,color='red',label='shrink')
 plt.plot(sigma_rmt,R_rmt,color='green',label='rmt $\lambda_{+}$')
-plt.plot(sigma_rmt2,R_rmt2,color='red',label='rmt $\lambda_{+},\lambda_{-}$')
-#plt.plot(sigma_RIE,R_RIE,color='purple',label='RIE')
+#plt.plot(sigma_rmt2,R_rmt2,color='red',label='rmt $\lambda_{+},\lambda_{-}$')
+plt.plot(sigma_RIE,R_RIE,color='purple',label='RIE')
 plt.legend()
 plt.plot()
 plt.show()
