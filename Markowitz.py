@@ -7,13 +7,13 @@ import time
 from cmath import sqrt as csqrt
 #import scipy.stats
 
-df = pd.read_csv(r'F:\Desktop\Projet_Statapp\data\CAC40.csv', sep=';',decimal=',')
+df = pd.read_csv(r'F:\Desktop\Projet_Statapp\data\SPX_Data.csv', sep=';',decimal=',')
 
 start = '23-10-2010'
 end = '23-10-2020'
 df = df.drop(columns=['DATES']) #On supprime les dates
-df = df.drop(columns=['WLN FP Equity'])
-#df = df.drop(columns=['ABBV UN Equity','PSX UN Equity','ADI UW Equity','KMI UN Equity','HCA UN Equity','FBHS UN Equity','MDLZ UW Equity','TXN UW Equity','HII UN Equity','XYL UN Equity','MPC UN Equity','WDC UW Equity','FANG UW Equity','NOW UN Equity','FB UW Equity','APTV UN Equity'])
+#df = df.drop(columns=['WLN FP Equity'])
+df = df.drop(columns=['ABBV UN Equity','PSX UN Equity','ADI UW Equity','KMI UN Equity','HCA UN Equity','FBHS UN Equity','MDLZ UW Equity','TXN UW Equity','HII UN Equity','XYL UN Equity','MPC UN Equity','WDC UW Equity','FANG UW Equity','NOW UN Equity','FB UW Equity','APTV UN Equity'])
 df = df.dropna() #On enlève toutes les lignes où il manque au moins une donnée
 df = df.reset_index(drop=True) #On réordonne les indices, faire attention pas toujours bien si on veut calculer le return monthly
 df = df.apply(lambda x: 100*x/x[0]) #On normalise 
@@ -217,16 +217,18 @@ mean,corr=mean_cov_dataframe(returns_daily)
 
 #Matrice de corrélation
 
-plt.title('Représentation graphique de la matrice de covariance')
+plt.title('Représentation graphique de la matrice de covariance du CAC 40')
 plt.imshow(corr)
 plt.show()
 
 #Spectre :
 
+plt.axis((-10,185,0,125))
 plt.xlabel('$\lambda$')
 plt.ylabel('Occurrence')
 plt.title('Histogramme du spectre de la matrice de covariance')
-plt.hist(np.linalg.eigvalsh(corr))
+a = np.linalg.eigvalsh(corr)
+plt.hist(a,bins=500) #ylim = 125
 plt.show()
 
 ###Comparaison entre Ledoit Wolf, Ledoit Wolf avec passage en corrélation et estimateur empirique
